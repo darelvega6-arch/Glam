@@ -1,0 +1,754 @@
+
+================================================================================
+           MANUAL COMPLETO DE GWL+ (GlaWebLang Plus)
+           Lenguaje de Programación Único y Original
+================================================================================
+
+ÍNDICE:
+1. PALABRAS CLAVE Y ESTRUCTURAS
+2. SÍMBOLOS Y OPERADORES
+3. TIPOS DE DATOS
+4. FUNCIONES NATIVAS (BUILT-IN)
+5. SINTAXIS COMPLETA
+6. EJEMPLOS DE USO
+
+================================================================================
+1. PALABRAS CLAVE Y ESTRUCTURAS DEL LENGUAJE
+================================================================================
+
+PALABRA: definir
+TIPO: Palabra clave
+FUNCIÓN: Declara una nueva función
+SINTAXIS: definir nombre_funcion(parametros):
+EJEMPLO: 
+  definir sumar(a, b):
+      retornar a + b
+  fin
+
+---
+
+PALABRA: fin
+TIPO: Palabra clave
+FUNCIÓN: Cierra bloques de código (funciones, condicionales, bucles)
+SINTAXIS: fin
+EJEMPLO:
+  si x > 0:
+      imprimir(x)
+  fin
+
+---
+
+PALABRA: si
+TIPO: Palabra clave (condicional)
+FUNCIÓN: Inicia una estructura condicional (if)
+SINTAXIS: si condicion:
+EJEMPLO:
+  si edad >= 18:
+      imprimir("Mayor de edad")
+  fin
+
+---
+
+PALABRA: sino
+TIPO: Palabra clave (condicional)
+FUNCIÓN: Define el bloque alternativo del condicional (else)
+SINTAXIS: sino:
+EJEMPLO:
+  si edad >= 18:
+      imprimir("Mayor de edad")
+  sino:
+      imprimir("Menor de edad")
+  fin
+
+---
+
+PALABRA: para
+TIPO: Palabra clave (bucle)
+FUNCIÓN: Inicia un bucle for que itera sobre una colección
+SINTAXIS: para variable en coleccion:
+EJEMPLO:
+  numeros = [1, 2, 3, 4, 5]
+  para num en numeros:
+      imprimir(num)
+  fin
+
+---
+
+PALABRA: en
+TIPO: Palabra clave (operador)
+FUNCIÓN: Operador usado en bucles "para" para indicar iteración
+SINTAXIS: para variable en coleccion:
+EJEMPLO: para item en lista:
+
+---
+
+PALABRA: mientras
+TIPO: Palabra clave (bucle)
+FUNCIÓN: Inicia un bucle while que ejecuta mientras la condición sea verdadera
+SINTAXIS: mientras condicion:
+EJEMPLO:
+  contador = 0
+  mientras contador < 5:
+      imprimir(contador)
+      contador = contador + 1
+  fin
+
+---
+
+PALABRA: retornar
+TIPO: Palabra clave
+FUNCIÓN: Devuelve un valor desde una función
+SINTAXIS: retornar valor
+EJEMPLO:
+  definir multiplicar(a, b):
+      retornar a * b
+  fin
+
+---
+
+PALABRA: verdadero
+TIPO: Valor booleano
+FUNCIÓN: Representa el valor booleano "true"
+SINTAXIS: verdadero
+EJEMPLO: activo = verdadero
+
+---
+
+PALABRA: falso
+TIPO: Valor booleano
+FUNCIÓN: Representa el valor booleano "false"
+SINTAXIS: falso
+EJEMPLO: inactivo = falso
+
+---
+
+PALABRA: nulo
+TIPO: Valor null
+FUNCIÓN: Representa un valor nulo/vacío
+SINTAXIS: nulo
+EJEMPLO: resultado = nulo
+
+---
+
+PALABRA: y
+TIPO: Operador lógico
+FUNCIÓN: Operador lógico AND (conjunción)
+SINTAXIS: condicion1 y condicion2
+EJEMPLO: si x > 0 y x < 10:
+
+---
+
+PALABRA: o
+TIPO: Operador lógico
+FUNCIÓN: Operador lógico OR (disyunción)
+SINTAXIS: condicion1 o condicion2
+EJEMPLO: si x == 0 o x == 1:
+
+
+================================================================================
+2. SÍMBOLOS Y OPERADORES COMPLETOS
+================================================================================
+
+SÍMBOLO: =
+TIPO: Operador de asignación
+FUNCIÓN: Asigna un valor a una variable
+EJEMPLO: nombre = "Juan"
+
+---
+
+SÍMBOLO: +
+TIPO: Operador aritmético
+FUNCIÓN: 
+  - Suma de números: 5 + 3 = 8
+  - Concatenación de strings: "Hola" + " Mundo" = "Hola Mundo"
+EJEMPLO: 
+  resultado = 10 + 5
+  texto = "Hola" + " amigo"
+
+---
+
+SÍMBOLO: -
+TIPO: Operador aritmético
+FUNCIÓN: Resta de números
+EJEMPLO: resultado = 10 - 3  # resultado = 7
+
+---
+
+SÍMBOLO: *
+TIPO: Operador aritmético
+FUNCIÓN: Multiplicación de números
+EJEMPLO: resultado = 5 * 4  # resultado = 20
+
+---
+
+SÍMBOLO: /
+TIPO: Operador aritmético
+FUNCIÓN: División de números
+EJEMPLO: resultado = 20 / 4  # resultado = 5
+NOTA: División por cero genera un error
+
+---
+
+SÍMBOLO: ==
+TIPO: Operador de comparación
+FUNCIÓN: Compara si dos valores son iguales
+DEVUELVE: verdadero o falso
+EJEMPLO: si edad == 18:
+
+---
+
+SÍMBOLO: !=
+TIPO: Operador de comparación
+FUNCIÓN: Compara si dos valores son diferentes
+DEVUELVE: verdadero o falso
+EJEMPLO: si edad != 0:
+
+---
+
+SÍMBOLO: <
+TIPO: Operador de comparación
+FUNCIÓN: Compara si el valor izquierdo es menor que el derecho
+DEVUELVE: verdadero o falso
+EJEMPLO: si x < 10:
+
+---
+
+SÍMBOLO: >
+TIPO: Operador de comparación
+FUNCIÓN: Compara si el valor izquierdo es mayor que el derecho
+DEVUELVE: verdadero o falso
+EJEMPLO: si x > 0:
+
+---
+
+SÍMBOLO: <=
+TIPO: Operador de comparación
+FUNCIÓN: Compara si el valor izquierdo es menor o igual que el derecho
+DEVUELVE: verdadero o falso
+EJEMPLO: si edad <= 18:
+
+---
+
+SÍMBOLO: >=
+TIPO: Operador de comparación
+FUNCIÓN: Compara si el valor izquierdo es mayor o igual que el derecho
+DEVUELVE: verdadero o falso
+EJEMPLO: si edad >= 18:
+
+---
+
+SÍMBOLO: :
+TIPO: Delimitador de bloque
+FUNCIÓN: Indica el inicio de un bloque de código
+USO: Se coloca después de: definir, si, sino, para, mientras
+EJEMPLO: si condicion:
+
+---
+
+SÍMBOLO: #
+TIPO: Comentario
+FUNCIÓN: Inicia un comentario de una línea (el texto después se ignora)
+EJEMPLO: # Este es un comentario
+
+---
+
+SÍMBOLO: ( )
+TIPO: Paréntesis
+FUNCIÓN: 
+  - Agrupa expresiones: (5 + 3) * 2
+  - Define parámetros de función: definir sumar(a, b):
+  - Llama funciones: imprimir("Hola")
+EJEMPLO: resultado = (10 + 5) * 2
+
+---
+
+SÍMBOLO: [ ]
+TIPO: Corchetes
+FUNCIÓN: Define arrays (listas)
+EJEMPLO: numeros = [1, 2, 3, 4, 5]
+
+---
+
+SÍMBOLO: ,
+TIPO: Coma (separador)
+FUNCIÓN: Separa elementos en:
+  - Parámetros de función
+  - Elementos de array
+  - Argumentos en llamadas a función
+EJEMPLO: definir sumar(a, b, c):
+
+---
+
+SÍMBOLO: " " o ' '
+TIPO: Comillas (delimitadores de string)
+FUNCIÓN: Define cadenas de texto (strings)
+EJEMPLO: 
+  nombre = "Juan"
+  apellido = 'Pérez'
+
+---
+
+SÍMBOLO: \n
+TIPO: Carácter de escape (salto de línea)
+FUNCIÓN: Inserta un salto de línea en un string
+EJEMPLO: texto = "Línea 1\nLínea 2"
+
+---
+
+SÍMBOLO: \t
+TIPO: Carácter de escape (tabulación)
+FUNCIÓN: Inserta una tabulación en un string
+EJEMPLO: texto = "Nombre:\tJuan"
+
+
+================================================================================
+3. TIPOS DE DATOS COMPLETOS
+================================================================================
+
+TIPO: number (número)
+DESCRIPCIÓN: Números enteros o decimales
+EJEMPLOS:
+  edad = 25
+  precio = 19.99
+  temperatura = -5
+  pi = 3.14159
+
+---
+
+TIPO: string (cadena de texto)
+DESCRIPCIÓN: Texto entre comillas " " o ' '
+EJEMPLOS:
+  nombre = "María"
+  apellido = 'González'
+  mensaje = "Hola Mundo"
+  vacio = ""
+
+---
+
+TIPO: boolean (booleano)
+DESCRIPCIÓN: Valores lógicos verdadero/falso
+VALORES POSIBLES: verdadero, falso
+EJEMPLOS:
+  activo = verdadero
+  terminado = falso
+
+---
+
+TIPO: null (nulo)
+DESCRIPCIÓN: Representa ausencia de valor
+VALOR: nulo
+EJEMPLO: resultado = nulo
+
+---
+
+TIPO: array (lista)
+DESCRIPCIÓN: Colección ordenada de elementos
+SINTAXIS: [elemento1, elemento2, elemento3]
+EJEMPLOS:
+  numeros = [1, 2, 3, 4, 5]
+  nombres = ["Ana", "Luis", "Pedro"]
+  mixto = [1, "texto", verdadero]
+  vacio = []
+
+
+================================================================================
+4. FUNCIONES NATIVAS (BUILT-IN) COMPLETAS
+================================================================================
+
+FUNCIÓN: mostrar()
+PARÁMETROS: 1 - elemento (elemento de UI)
+TIPO DE RETORNO: nulo
+DESCRIPCIÓN: Muestra un elemento de interfaz de usuario en la pantalla
+USO: Se usa con elementos creados por funciones de UI (titulo, texto, boton)
+EJEMPLO:
+  mostrar(titulo("Mi App", 1))
+  mostrar(texto("Bienvenido"))
+  mostrar(boton("Haz clic"))
+
+---
+
+FUNCIÓN: imprimir()
+PARÁMETROS: 1 - valor (cualquier tipo)
+TIPO DE RETORNO: nulo
+DESCRIPCIÓN: Imprime un valor en la consola de depuración
+USO: Para debugging y ver valores durante la ejecución
+EJEMPLO:
+  imprimir("Hola Mundo")
+  imprimir(42)
+  imprimir(verdadero)
+  x = 10
+  imprimir(x)
+
+---
+
+FUNCIÓN: str()
+PARÁMETROS: 1 - valor (cualquier tipo)
+TIPO DE RETORNO: string
+DESCRIPCIÓN: Convierte cualquier valor a una cadena de texto
+USO: Necesario para concatenar números con texto
+EJEMPLO:
+  edad = 25
+  mensaje = "Tengo " + str(edad) + " años"
+  imprimir(str(42))  # Imprime "42"
+  numero = 3.14
+  texto = str(numero)  # texto = "3.14"
+
+---
+
+FUNCIÓN: crear_ventana()
+PARÁMETROS: 1 - titulo (string)
+TIPO DE RETORNO: objeto ventana de UI
+DESCRIPCIÓN: Crea una ventana contenedora para elementos de UI
+USO: Para organizar interfaces complejas
+EJEMPLO:
+  ventana = crear_ventana("Mi Aplicación")
+
+---
+
+FUNCIÓN: titulo()
+PARÁMETROS: 
+  1 - texto (string) - El texto del título
+  2 - tamano (number, opcional) - Tamaño del 1 al 6 (1 es el más grande)
+TIPO DE RETORNO: elemento UI de tipo título
+DESCRIPCIÓN: Crea un encabezado/título para mostrar
+VALORES DE TAMAÑO:
+  1 = Título más grande (h1)
+  2 = Título grande (h2)
+  3 = Título mediano (h3)
+  4 = Título pequeño (h4)
+  5 = Título muy pequeño (h5)
+  6 = Título mínimo (h6)
+EJEMPLO:
+  t1 = titulo("Bienvenido", 1)
+  mostrar(t1)
+  mostrar(titulo("Subtítulo", 2))
+
+---
+
+FUNCIÓN: texto()
+PARÁMETROS: 1 - contenido (string)
+TIPO DE RETORNO: elemento UI de tipo texto
+DESCRIPCIÓN: Crea un párrafo de texto para mostrar
+USO: Para mostrar información textual en la interfaz
+EJEMPLO:
+  p = texto("Este es un párrafo")
+  mostrar(p)
+  mostrar(texto("Información importante"))
+
+---
+
+FUNCIÓN: boton()
+PARÁMETROS: 1 - etiqueta (string)
+TIPO DE RETORNO: elemento UI de tipo botón
+DESCRIPCIÓN: Crea un botón clickeable
+USO: Para crear botones en la interfaz
+EJEMPLO:
+  btn = boton("Haz clic aquí")
+  mostrar(btn)
+  mostrar(boton("Enviar"))
+  mostrar(boton("Cancelar"))
+
+---
+
+FUNCIÓN: entrada()
+PARÁMETROS: 1 - placeholder (string) - Texto de ayuda que aparece en el input
+TIPO DE RETORNO: elemento UI de tipo entrada
+DESCRIPCIÓN: Crea un campo de entrada de texto
+USO: Para que el usuario ingrese información
+EJEMPLO:
+  input = entrada("Escribe tu nombre")
+  mostrar(input)
+  mostrar(entrada("Ingresa tu email"))
+
+
+================================================================================
+5. SINTAXIS COMPLETA DE ESTRUCTURAS
+================================================================================
+
+---------------------------------------
+ESTRUCTURA: Declaración de Variables
+---------------------------------------
+SINTAXIS: nombre_variable = valor
+DESCRIPCIÓN: Crea o actualiza una variable
+EJEMPLOS:
+  edad = 25
+  nombre = "María"
+  activo = verdadero
+  numeros = [1, 2, 3]
+
+---------------------------------------
+ESTRUCTURA: Definición de Función
+---------------------------------------
+SINTAXIS:
+  definir nombre_funcion(parametro1, parametro2, ...):
+      # cuerpo de la función
+      retornar valor
+  fin
+
+DESCRIPCIÓN: Define una función reutilizable
+EJEMPLOS:
+  definir saludar(nombre):
+      retornar "Hola, " + nombre
+  fin
+
+  definir sumar(a, b):
+      resultado = a + b
+      retornar resultado
+  fin
+
+  definir sin_retorno():
+      imprimir("Ejecutado")
+  fin
+
+---------------------------------------
+ESTRUCTURA: Llamada a Función
+---------------------------------------
+SINTAXIS: nombre_funcion(argumento1, argumento2, ...)
+DESCRIPCIÓN: Ejecuta una función con los argumentos proporcionados
+EJEMPLOS:
+  resultado = sumar(5, 3)
+  mensaje = saludar("Juan")
+  imprimir(mensaje)
+
+---------------------------------------
+ESTRUCTURA: Condicional SI-SINO
+---------------------------------------
+SINTAXIS:
+  si condicion:
+      # código si verdadero
+  fin
+
+  si condicion:
+      # código si verdadero
+  sino:
+      # código si falso
+  fin
+
+DESCRIPCIÓN: Ejecuta código según una condición
+EJEMPLOS:
+  si edad >= 18:
+      imprimir("Mayor de edad")
+  fin
+
+  si x > 0:
+      imprimir("Positivo")
+  sino:
+      imprimir("Negativo o cero")
+  fin
+
+  si nota >= 90:
+      calificacion = "A"
+  sino:
+      calificacion = "B"
+  fin
+
+---------------------------------------
+ESTRUCTURA: Bucle PARA
+---------------------------------------
+SINTAXIS:
+  para variable en coleccion:
+      # código que se repite
+  fin
+
+DESCRIPCIÓN: Itera sobre cada elemento de una colección
+EJEMPLOS:
+  numeros = [1, 2, 3, 4, 5]
+  para num en numeros:
+      imprimir(num)
+  fin
+
+  nombres = ["Ana", "Luis", "Pedro"]
+  para nombre en nombres:
+      mensaje = "Hola " + nombre
+      imprimir(mensaje)
+  fin
+
+---------------------------------------
+ESTRUCTURA: Bucle MIENTRAS
+---------------------------------------
+SINTAXIS:
+  mientras condicion:
+      # código que se repite
+  fin
+
+DESCRIPCIÓN: Repite código mientras la condición sea verdadera
+ADVERTENCIA: Cuidado con bucles infinitos (máximo 10,000 iteraciones)
+EJEMPLOS:
+  contador = 0
+  mientras contador < 5:
+      imprimir(contador)
+      contador = contador + 1
+  fin
+
+  x = 10
+  mientras x > 0:
+      imprimir(x)
+      x = x - 1
+  fin
+
+
+================================================================================
+6. EJEMPLOS COMPLETOS Y CASOS DE USO
+================================================================================
+
+---------------------------------------
+EJEMPLO 1: Calculadora Simple
+---------------------------------------
+# Variables básicas
+num1 = 10
+num2 = 5
+
+# Operaciones
+suma = num1 + num2
+resta = num1 - num2
+multiplicacion = num1 * num2
+division = num1 / num2
+
+# Mostrar resultados en interfaz
+mostrar(titulo("Calculadora", 1))
+mostrar(texto("Suma: " + str(suma)))
+mostrar(texto("Resta: " + str(resta)))
+mostrar(texto("Multiplicación: " + str(multiplicacion)))
+mostrar(texto("División: " + str(division)))
+
+---------------------------------------
+EJEMPLO 2: Función Factorial (Recursiva)
+---------------------------------------
+# Función que calcula factorial
+definir factorial(n):
+    si n == 0:
+        retornar 1
+    sino:
+        retornar n * factorial(n - 1)
+    fin
+fin
+
+# Calcular y mostrar
+resultado = factorial(5)
+mostrar(titulo("Factorial", 1))
+mostrar(texto("5! = " + str(resultado)))
+
+---------------------------------------
+EJEMPLO 3: Lista de Tareas
+---------------------------------------
+# Datos
+titulo_app = "Mi Lista de Tareas"
+tareas = ["Estudiar GWL+", "Hacer ejercicio", "Leer"]
+
+# Función para contar
+definir contar_elementos(lista):
+    cuenta = 0
+    para item en lista:
+        cuenta = cuenta + 1
+    fin
+    retornar cuenta
+fin
+
+# Construir interfaz
+total = contar_elementos(tareas)
+mostrar(titulo(titulo_app, 1))
+mostrar(texto("Total: " + str(total) + " tareas"))
+
+para tarea en tareas:
+    mostrar(texto("✓ " + tarea))
+fin
+
+mostrar(boton("Agregar Tarea"))
+
+---------------------------------------
+EJEMPLO 4: Validación de Edad
+---------------------------------------
+nombre = "Carlos"
+edad = 20
+
+# Determinar si es mayor de edad
+si edad >= 18:
+    estado = "mayor de edad"
+    puede_votar = verdadero
+sino:
+    estado = "menor de edad"
+    puede_votar = falso
+fin
+
+# Crear interfaz
+mostrar(titulo("Validación", 1))
+mostrar(texto(nombre + " es " + estado))
+
+si puede_votar:
+    mostrar(boton("Registrar para votar"))
+sino:
+    mostrar(texto("No puede votar aún"))
+fin
+
+---------------------------------------
+EJEMPLO 5: Contador con Bucle
+---------------------------------------
+mostrar(titulo("Contador", 1))
+
+# Bucle para contar del 1 al 10
+contador = 1
+mientras contador <= 10:
+    mostrar(texto("Número: " + str(contador)))
+    contador = contador + 1
+fin
+
+mostrar(texto("Conteo completado!"))
+
+---------------------------------------
+EJEMPLO 6: Promedio de Calificaciones
+---------------------------------------
+# Array de calificaciones
+calificaciones = [85, 90, 78, 92, 88]
+
+# Función para calcular promedio
+definir calcular_promedio(notas):
+    suma = 0
+    cantidad = 0
+    
+    para nota en notas:
+        suma = suma + nota
+        cantidad = cantidad + 1
+    fin
+    
+    promedio = suma / cantidad
+    retornar promedio
+fin
+
+# Calcular y mostrar
+resultado = calcular_promedio(calificaciones)
+
+mostrar(titulo("Reporte de Notas", 1))
+mostrar(texto("Cantidad de notas: " + str(5)))
+mostrar(texto("Promedio: " + str(resultado)))
+
+si resultado >= 85:
+    mostrar(texto("¡Excelente desempeño!"))
+sino:
+    mostrar(texto("Continúa esforzándote"))
+fin
+
+
+================================================================================
+7. REGLAS Y RESTRICCIONES DEL LENGUAJE
+================================================================================
+
+1. INDENTACIÓN: No es obligatoria, pero se recomienda para legibilidad
+2. PUNTO Y COMA: NO se usa en GWL+
+3. FIN: OBLIGATORIO para cerrar todos los bloques
+4. DOS PUNTOS: OBLIGATORIOS después de: definir, si, sino, para, mientras
+5. CASE SENSITIVE: Las variables distinguen mayúsculas de minúsculas
+   - "nombre" es diferente de "Nombre" y "NOMBRE"
+6. COMENTARIOS: Solo con # (no hay comentarios multi-línea)
+7. STRINGS: Se pueden usar " " o ' ' indistintamente
+8. DIVISIÓN POR CERO: Genera error
+9. BUCLES INFINITOS: Se detectan y detienen después de 10,000 iteraciones
+10. VARIABLES NO DEFINIDAS: Genera error al intentar usar una variable que no existe
+
+================================================================================
+FIN DEL MANUAL COMPLETO DE GWL+
+================================================================================
+Versión: 1.0
+Fecha: 2024
+Lenguaje: GlaWebLang Plus (GWL+)
+© Todos los derechos reservados
+================================================================================
