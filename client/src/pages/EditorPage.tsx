@@ -1,12 +1,12 @@
+
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Project } from "@shared/schema";
 import CodeEditor from "@/components/CodeEditor";
-import PreviewPanel from "@/components/PreviewPanel";
 import { interpretGWL, exampleGWLCode } from "@/lib/gwl-interpreter";
 import { Button } from "@/components/ui/button";
-import { Code2, Home, Save, CheckCircle2 } from "lucide-react";
+import { Code2, Home, Save, CheckCircle2, X, Maximize2 } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,6 +20,9 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
   const [code, setCode] = useState(exampleGWLCode);
   const [output, setOutput] = useState(() => interpretGWL(exampleGWLCode));
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [saveAnimation, setSaveAnimation] = useState(false);
 
   const { data: project, isLoading } = useQuery({
     queryKey: ['/api/projects', projectId],
@@ -37,14 +40,16 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
       setHasUnsavedChanges(false);
+      setSaveAnimation(true);
+      setTimeout(() => setSaveAnimation(false), 500);
       toast({
-        title: "Guardado",
-        description: "Tus cambios se han guardado exitosamente",
+        title: "✅ Guardado exitoso",
+        description: "Tus cambios se han guardado correctamente",
       });
     },
     onError: () => {
       toast({
-        title: "Error",
+        title: "❌ Error al guardar",
         description: "No se pudieron guardar los cambios",
         variant: "destructive",
       });
@@ -65,8 +70,13 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
   };
 
   const handleRun = (codeToRun: string) => {
-    const result = interpretGWL(codeToRun);
-    setOutput(result);
+    setIsExecuting(true);
+    setTimeout(() => {
+      const result = interpretGWL(codeToRun);
+      setOutput(result);
+      setIsExecuting(false);
+      setShowPreview(true);
+    }, 300);
   };
 
   const handleSave = () => {
@@ -74,28 +84,36 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
       saveMutation.mutate(code);
     } else {
       toast({
-        title: "Guardado local",
+        title: "💾 Guardado local",
         description: "Los cambios se mantienen en esta sesión",
       });
     }
   };
 
+  const handleClosePreview = () => {
+    setShowPreview(false);
+  };
+
   if (isLoading) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <p className="text-muted-foreground">Cargando proyecto...</p>
+        <div className="text-center">
+          <div className="animate-spin-slow h-12 w-12 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando proyecto...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="h-screen flex flex-col">
-      <header className="h-16 border-b flex items-center justify-between px-6">
+      <header className="h-16 border-b flex items-center justify-between px-6 bg-background z-50">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={onBack}
+            className="hover:scale-110 transition-transform"
             data-testid="button-back-home"
           >
             <Home className="h-5 w-5" />
@@ -117,10 +135,14 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
               size="sm"
               onClick={handleSave}
               disabled={saveMutation.isPending || !hasUnsavedChanges}
+              className={`transition-all ${saveAnimation ? 'animate-pulse-success' : ''}`}
               data-testid="button-save-project"
             >
               {saveMutation.isPending ? (
-                <>Guardando...</>
+                <>
+                  <div className="animate-spin-slow h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                  Guardando...
+                </>
               ) : hasUnsavedChanges ? (
                 <>
                   <Save className="h-4 w-4 mr-2" />
@@ -138,23 +160,111 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
         </div>
       </header>
       
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-0">
-        <div className="h-full border-r overflow-auto">
-          <CodeEditor
-            initialCode={code}
-            onCodeChange={handleCodeChange}
-            onRun={handleRun}
-          />
-        </div>
-        
-        <div className="h-full overflow-auto">
-          <PreviewPanel
-            html={output.html}
-            css={output.css}
-            errors={output.errors}
-          />
-        </div>
+      <div className="flex-1 overflow-hidden">
+        <CodeEditor
+          initialCode={code}
+          onCodeChange={handleCodeChange}
+          onRun={handleRun}
+          isExecuting={isExecuting}
+        />
       </div>
+
+      {/* Vista previa en pantalla completa */}
+      {showPreview && (
+        <div className="fixed inset-0 z-50 bg-background animate-slide-in">
+          <div className="h-full flex flex-col">
+            <div className="h-16 border-b flex items-center justify-between px-6 bg-background">
+              <div className="flex items-center gap-3">
+                <Maximize2 className="h-5 w-5 text-primary" />
+                <h2 className="text-xl font-semibold">Vista Previa GWL+</h2>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleClosePreview}
+                className="hover:scale-110 transition-transform"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-6">
+              {output.errors.length > 0 ? (
+                <div className="animate-fade-in max-w-2xl mx-auto">
+                  <div className="bg-destructive/10 border-2 border-destructive rounded-lg p-8">
+                    <h3 className="text-2xl font-bold text-destructive mb-4">❌ Error en el código</h3>
+                    {output.errors.map((error, idx) => (
+                      <p key={idx} className="text-destructive mb-2 font-mono text-sm">
+                        {error}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="animate-fade-in">
+                  <iframe
+                    srcDoc={`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <style>
+                            * { margin: 0; padding: 0; box-sizing: border-box; }
+                            body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; }
+                            .gwl-preview { padding: 40px; text-align: center; color: #888; }
+                            .gwl-error { padding: 20px; color: #ef4444; background: #fee; border-radius: 8px; }
+                            .gwl-button { 
+                              padding: 12px 24px; 
+                              background: hsl(262, 83%, 58%);
+                              color: white; 
+                              border: none; 
+                              border-radius: 8px; 
+                              cursor: pointer;
+                              font-size: 16px;
+                              transition: all 0.3s;
+                            }
+                            .gwl-button:hover { 
+                              background: hsl(262, 83%, 50%);
+                              transform: translateY(-2px);
+                              box-shadow: 0 4px 12px rgba(167, 139, 250, 0.3);
+                            }
+                            .gwl-button:active {
+                              transform: translateY(0);
+                            }
+                            .gwl-container { padding: 20px; margin: 10px 0; }
+                            .gwl-input {
+                              padding: 12px;
+                              border: 2px solid #ddd;
+                              border-radius: 8px;
+                              font-size: 16px;
+                              width: 100%;
+                              max-width: 400px;
+                              transition: border-color 0.3s;
+                            }
+                            .gwl-input:focus {
+                              outline: none;
+                              border-color: hsl(262, 83%, 58%);
+                            }
+                            .gwl-image { max-width: 100%; height: auto; border-radius: 8px; }
+                            h1, h2, h3 { margin: 1em 0 0.5em 0; color: #111; }
+                            h1 { font-size: 2.5em; }
+                            p { margin: 0.5em 0; color: #555; line-height: 1.6; }
+                            ${output.css}
+                          </style>
+                        </head>
+                        <body>
+                          ${output.html}
+                        </body>
+                      </html>
+                    `}
+                    className="w-full h-full border-2 border-border rounded-lg bg-white dark:bg-gray-900"
+                    title="Vista Previa GWL+"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

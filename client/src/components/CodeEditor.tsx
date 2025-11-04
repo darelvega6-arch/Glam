@@ -9,6 +9,7 @@ interface CodeEditorProps {
   onCodeChange?: (code: string) => void;
   onRun?: (code: string) => void;
   readOnly?: boolean;
+  isExecuting?: boolean;
 }
 
 export default function CodeEditor({
@@ -16,6 +17,7 @@ export default function CodeEditor({
   onCodeChange,
   onRun,
   readOnly = false,
+  isExecuting = false,
 }: CodeEditorProps) {
   const [code, setCode] = useState(initialCode);
   const [lineCount, setLineCount] = useState(
@@ -83,10 +85,21 @@ export default function CodeEditor({
           <Button
             size="sm"
             onClick={handleRun}
+            disabled={isExecuting}
+            className={`transition-all ${isExecuting ? 'animate-pulse-success' : 'hover:scale-105'}`}
             data-testid="button-run-code"
           >
-            <Play className="h-4 w-4 mr-1" />
-            Ejecutar
+            {isExecuting ? (
+              <>
+                <div className="animate-spin-slow h-4 w-4 border-2 border-white border-t-transparent rounded-full mr-2"></div>
+                Ejecutando...
+              </>
+            ) : (
+              <>
+                <Play className="h-4 w-4 mr-1" />
+                Ejecutar
+              </>
+            )}
           </Button>
         </div>
       </div>
