@@ -13,24 +13,47 @@ type Page = "landing" | "editor" | "tutorials" | "projects";
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
+  const [currentProjectId, setCurrentProjectId] = useState<string | undefined>();
+
+  const handleNavigateToEditor = (projectId?: string) => {
+    setCurrentProjectId(projectId);
+    setCurrentPage("editor");
+  };
 
   const renderPage = () => {
     switch (currentPage) {
       case "landing":
-        return <LandingPage onGetStarted={() => setCurrentPage("editor")} />;
+        return (
+          <LandingPage 
+            onGetStarted={() => handleNavigateToEditor()}
+            onNavigateToTutorials={() => setCurrentPage("tutorials")}
+            onNavigateToProjects={() => setCurrentPage("projects")}
+          />
+        );
       case "editor":
-        return <EditorPage onBack={() => setCurrentPage("landing")} />;
+        return (
+          <EditorPage
+            onBack={() => setCurrentPage("landing")}
+            projectId={currentProjectId}
+          />
+        );
       case "tutorials":
         return <TutorialsPage onBack={() => setCurrentPage("landing")} />;
       case "projects":
         return (
           <ProjectsPage
             onBack={() => setCurrentPage("landing")}
-            onEditProject={() => setCurrentPage("editor")}
+            onEditProject={(projectId) => handleNavigateToEditor(projectId)}
           />
         );
       default:
-        return <LandingPage onGetStarted={() => setCurrentPage("editor")} />;
+        return (
+          <LandingPage 
+            onGetStarted={() => handleNavigateToEditor()}
+            onNavigateToTutorials={() => setCurrentPage("tutorials")}
+            onNavigateToProjects={() => setCurrentPage("projects")}
+          />
+        );
     }
   };
 

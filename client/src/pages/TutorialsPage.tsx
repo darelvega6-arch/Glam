@@ -2,7 +2,7 @@ import { useState } from "react";
 import TutorialCard from "@/components/TutorialCard";
 import CodeEditor from "@/components/CodeEditor";
 import PreviewPanel from "@/components/PreviewPanel";
-import { interpretGWL } from "@/lib/gwl-interpreter";
+import { interpretGWL, tutorialExamples } from "@/lib/gwl-interpreter";
 import { Button } from "@/components/ui/button";
 import { Code2, Home, ChevronLeft, ChevronRight } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -16,47 +16,42 @@ const tutorials = [
   {
     id: 1,
     title: "Hola Mundo en GWL+",
-    description: "Aprende a crear tu primer componente",
+    description: "Aprende a crear tu primer componente con elementos básicos",
     category: "Fundamentos",
     duration: "10 min",
     completed: false,
-    content: "En este tutorial aprenderás a crear tu primer componente en GWL+...",
-    starterCode: `// Tu primer componente
-component HelloWorld():
-  render:
-    Heading("¡Hola Mundo!")
-end`,
+    content: "En este tutorial aprenderás los conceptos básicos de GWL+. Crearás tu primer componente con un título, texto y botón. Los componentes son bloques reutilizables de código.",
+    starterCode: tutorialExamples.basic,
   },
   {
     id: 2,
-    title: "Trabajando con Texto y Botones",
-    description: "Aprende a usar elementos básicos",
-    category: "Fundamentos",
+    title: "Trabajando con Estilos",
+    description: "Aprende a personalizar el aspecto de tus componentes",
+    category: "Diseño",
     duration: "15 min",
     completed: false,
-    content: "Los elementos Text y Button son fundamentales...",
-    starterCode: `// Elementos básicos
-component Welcome():
-  render:
-    Text("Bienvenido")
-    Button("Click aquí")
-end`,
+    content: "Los estilos en GWL+ te permiten personalizar la apariencia de tus componentes. Usa la sintaxis 'style nombre:' seguido de reglas CSS entre llaves.",
+    starterCode: tutorialExamples.withStyles,
   },
   {
     id: 3,
-    title: "Contenedores y Diseño",
-    description: "Organiza tu contenido con contenedores",
-    category: "Diseño",
+    title: "Variables Dinámicas",
+    description: "Usa variables para hacer tu código más flexible",
+    category: "Fundamentos",
+    duration: "12 min",
+    completed: false,
+    content: "Las variables te permiten almacenar valores que puedes reutilizar. Declara variables con 'set nombre = valor' y úsalas con $nombre.",
+    starterCode: tutorialExamples.withVariables,
+  },
+  {
+    id: 4,
+    title: "Aplicación Completa",
+    description: "Combina todo lo aprendido en una app funcional",
+    category: "Avanzado",
     duration: "20 min",
     completed: false,
-    content: "Los contenedores te permiten organizar elementos...",
-    starterCode: `// Contenedores
-component Layout():
-  render:
-    Container(class="main"):
-      Heading("Mi Sitio")
-    end
-end`,
+    content: "Ahora combinaremos componentes, estilos y variables para crear una aplicación completa con header, contenido y formulario.",
+    starterCode: tutorialExamples.complete,
   },
 ];
 

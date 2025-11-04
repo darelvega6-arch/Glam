@@ -3,13 +3,19 @@ import Features from "@/components/Features";
 import SyntaxShowcase from "@/components/SyntaxShowcase";
 import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
-import { Code2 } from "lucide-react";
+import { Code2, BookOpen, FolderKanban } from "lucide-react";
 
 interface LandingPageProps {
   onGetStarted: () => void;
+  onNavigateToTutorials?: () => void;
+  onNavigateToProjects?: () => void;
 }
 
-export default function LandingPage({ onGetStarted }: LandingPageProps) {
+export default function LandingPage({ 
+  onGetStarted, 
+  onNavigateToTutorials, 
+  onNavigateToProjects 
+}: LandingPageProps) {
   return (
     <div className="min-h-screen">
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-sm border-b">
@@ -22,15 +28,19 @@ export default function LandingPage({ onGetStarted }: LandingPageProps) {
           <div className="flex items-center gap-4">
             <Button
               variant="ghost"
-              data-testid="link-docs"
+              onClick={onNavigateToTutorials}
+              data-testid="link-tutorials"
             >
-              Documentación
+              <BookOpen className="h-4 w-4 mr-2" />
+              Tutoriales
             </Button>
             <Button
               variant="ghost"
-              data-testid="link-tutorials"
+              onClick={onNavigateToProjects}
+              data-testid="link-projects"
             >
-              Tutoriales
+              <FolderKanban className="h-4 w-4 mr-2" />
+              Proyectos
             </Button>
             <ThemeToggle />
             <Button
