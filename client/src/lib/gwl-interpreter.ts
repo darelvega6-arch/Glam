@@ -591,14 +591,21 @@ class GWLRuntime {
     this.registerNativeFunction('mostrar', ['elemento'], (args) => {
       const elemento = args[0];
       
+      console.log('mostrar() recibió:', elemento);
+      
       // Verificar si es un GWLValue con un objeto UI dentro
       if (elemento && elemento.type === 'object' && elemento.value) {
         const uiObj = elemento.value;
+        console.log('Objeto UI extraído:', uiObj);
         // Verificar que sea un comando UI válido
         if (uiObj.type && uiObj.type.startsWith('ui_')) {
           this.uiCommands.push(uiObj);
-          console.log('UI Command agregado:', uiObj);
+          console.log('✅ UI Command agregado correctamente:', uiObj);
+        } else {
+          console.warn('❌ El objeto no tiene un tipo UI válido:', uiObj);
         }
+      } else {
+        console.warn('❌ mostrar() recibió un elemento inválido:', elemento);
       }
       
       return { type: 'null', value: null };
@@ -651,9 +658,12 @@ class GWLRuntime {
 
   execute(ast: any[]): any {
     this.uiCommands = [];
+    console.log('🚀 Ejecutando AST con', ast.length, 'nodos');
     for (const node of ast) {
       this.executeNode(node);
     }
+    console.log('✅ Ejecución completada. Total UI commands:', this.uiCommands.length);
+    console.log('UI Commands generados:', this.uiCommands);
     return this.uiCommands;
   }
 
@@ -905,14 +915,22 @@ export function interpretGWL(code: string): GWLParseResult {
 }
 
 function uiCommandsToHTML(commands: any[]): string {
+  console.log('🎨 uiCommandsToHTML recibió:', commands);
+  
   if (!commands || commands.length === 0) {
+    console.warn('⚠️ No hay comandos UI para renderizar');
     return '';
   }
   
-  let html = '';
+  let html = '<div class="gwl-app">';
   for (const cmd of commands) {
-    html += renderUICommand(cmd);
+    const rendered = renderUICommand(cmd);
+    console.log('Renderizando comando:', cmd, '→', rendered);
+    html += rendered;
   }
+  html += '</div>';
+  
+  console.log('✅ HTML final generado:', html);
   return html;
 }
 
