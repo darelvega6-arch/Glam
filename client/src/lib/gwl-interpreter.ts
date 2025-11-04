@@ -106,8 +106,13 @@ class Lexer {
   }
 
   private skipWhitespace(): void {
-    while (this.pos < this.code.length && ' \t\r'.includes(this.code[this.pos])) {
-      this.pos++;
+    while (this.pos < this.code.length) {
+      const char = this.code[this.pos];
+      if (char === ' ' || char === '\t' || char === '\r') {
+        this.pos++;
+      } else {
+        break;
+      }
     }
   }
 
@@ -194,11 +199,8 @@ class Parser {
   private pos: number = 0;
 
   constructor(tokens: Token[]) {
-    this.tokens = tokens.filter(t => t.type !== 'NEWLINE' || this.isSignificantNewline(t));
-  }
-
-  private isSignificantNewline(token: Token): boolean {
-    return true; // Simplificado por ahora
+    // Mantener todos los tokens, el skipNewlines manejará los saltos de línea
+    this.tokens = tokens;
   }
 
   parse(): any[] {
@@ -215,6 +217,11 @@ class Parser {
   private parseStatement(): any {
     const token = this.peek();
 
+    // EOF check
+    if (token.type === 'EOF') {
+      return null;
+    }
+
     if (token.type === 'KEYWORD') {
       switch (token.value) {
         case 'definir': return this.parseFunctionDef();
@@ -222,6 +229,11 @@ class Parser {
         case 'para': return this.parseFor();
         case 'mientras': return this.parseWhile();
         case 'retornar': return this.parseReturn();
+        case 'fin':
+          // 'fin' encontrado fuera de contexto, saltarlo
+          return null;
+        default:
+          throw new Error(`Línea ${token.line}: Palabra clave desconocida '${token.value}'`);
       }
     }
 
@@ -492,7 +504,7 @@ class Parser {
       return { type: 'variable_reference', name };
     }
 
-    throw new Error(`Token inesperado: ${token.value} en línea ${token.line}`);
+    throw new Error(`Línea ${token.line}: Token inesperado '${token.value || token.type}'. Se esperaba un número, string, variable o expresión.`);
   }
 
   private parseArray(): any {
@@ -543,7 +555,9 @@ class Parser {
   private expect(type: string, value?: string): Token {
     const token = this.peek();
     if (token.type !== type || (value !== undefined && token.value !== value)) {
-      throw new Error(`Se esperaba ${type}${value ? ` '${value}'` : ''}, se encontró ${token.value} en línea ${token.line}`);
+      const expected = value ? `'${value}'` : type;
+      const found = token.value || token.type;
+      throw new Error(`Línea ${token.line}: Se esperaba ${expected}, pero se encontró '${found}'`);
     }
     return this.advance();
   }
@@ -837,6 +851,12 @@ export function interpretGWL(code: string): GWLParseResult {
   let css = '';
   let js = '';
 
+  // Si el código está vacío, mostrar mensaje de bienvenida
+  if (!code || code.trim() === '') {
+    html = '<div class="gwl-preview"><h2>Vista Previa GWL+</h2><p>Escribe tu código para comenzar...</p></div>';
+    return { html, css, js, errors };
+  }
+
   try {
     const lexer = new Lexer(code);
     const tokens = lexer.tokenize();
@@ -848,18 +868,31 @@ export function interpretGWL(code: string): GWLParseResult {
     html = uiCommandsToHTML(uiCommands);
 
     if (!html) {
-      html = '<div class="gwl-preview"><h2>Vista Previa GWL+</h2><p>Escribe tu código para comenzar...</p></div>';
+      html = '<div class="gwl-preview"><h2>Vista Previa GWL+</h2><p>El código se ejecutó correctamente, pero no se generó ninguna interfaz. Usa funciones como mostrar() para crear elementos visuales.</p></div>';
     }
 
   } catch (error) {
-    errors.push(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-    html = `<div class="gwl-error"><h3>Error en el código</h3><p>${error instanceof Error ? error.message : 'Error desconocido'}</p></div>`;
+    const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+    errors.push(errorMsg);
+    
+    // Mejorar el mensaje de error visual
+    html = `<div class="gwl-error">
+      <h3>❌ Error de Sintaxis</h3>
+      <p><strong>${errorMsg}</strong></p>
+      <p style="margin-top: 10px; font-size: 14px; color: #666;">
+        💡 Revisa que todas las estructuras (si, para, mientras, definir) terminen con ':' y tengan su correspondiente 'fin'
+      </p>
+    </div>`;
   }
 
   return { html, css, js, errors };
 }
 
 function uiCommandsToHTML(commands: any[]): string {
+  if (!commands || commands.length === 0) {
+    return '';
+  }
+  
   let html = '';
   for (const cmd of commands) {
     html += renderUICommand(cmd);

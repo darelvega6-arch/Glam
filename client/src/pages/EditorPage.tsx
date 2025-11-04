@@ -210,8 +210,34 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
                           <style>
                             * { margin: 0; padding: 0; box-sizing: border-box; }
                             body { font-family: system-ui, -apple-system, sans-serif; padding: 40px; }
-                            .gwl-preview { padding: 40px; text-align: center; color: #888; }
-                            .gwl-error { padding: 20px; color: #ef4444; background: #fee; border-radius: 8px; }
+                            .gwl-preview { 
+                              padding: 40px; 
+                              text-align: center; 
+                              color: #888;
+                              background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+                              min-height: 100vh;
+                              display: flex;
+                              flex-direction: column;
+                              align-items: center;
+                              justify-content: center;
+                            }
+                            .gwl-error { 
+                              padding: 30px; 
+                              color: #dc2626; 
+                              background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+                              border-radius: 12px;
+                              border: 2px solid #ef4444;
+                              max-width: 600px;
+                              margin: 20px auto;
+                              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                            }
+                            .gwl-error h3 {
+                              margin-bottom: 15px;
+                              font-size: 20px;
+                            }
+                            .gwl-error p {
+                              line-height: 1.6;
+                            }
                             .gwl-button { 
                               padding: 12px 24px; 
                               background: hsl(262, 83%, 58%);
