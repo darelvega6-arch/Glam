@@ -589,17 +589,15 @@ class GWLRuntime {
 
   private initBuiltins() {
     this.registerNativeFunction('mostrar', ['elemento'], (args) => {
-      // El argumento es el resultado de funciones como titulo(), texto(), etc.
-      // Necesitamos extraer el valor del objeto GWLValue
       const elemento = args[0];
       
-      // Si es un objeto con tipo UI, agregarlo directamente
-      if (elemento && typeof elemento === 'object' && elemento.type) {
-        if (elemento.type.startsWith('ui_')) {
-          this.uiCommands.push(elemento);
-        } else if (elemento.value && typeof elemento.value === 'object' && elemento.value.type) {
-          // Es un GWLValue que contiene un objeto UI
-          this.uiCommands.push(elemento.value);
+      // Verificar si es un GWLValue con un objeto UI dentro
+      if (elemento && elemento.type === 'object' && elemento.value) {
+        const uiObj = elemento.value;
+        // Verificar que sea un comando UI válido
+        if (uiObj.type && uiObj.type.startsWith('ui_')) {
+          this.uiCommands.push(uiObj);
+          console.log('UI Command agregado:', uiObj);
         }
       }
       
@@ -621,20 +619,24 @@ class GWLRuntime {
 
     this.registerNativeFunction('titulo', ['texto', 'tamano'], (args) => {
       const size = args[1] ? args[1].value : 1;
-      // Retornar directamente el objeto UI, no envuelto en GWLValue
-      return { type: 'ui_heading', text: args[0].value, size };
+      const uiObj = { type: 'ui_heading', text: args[0].value, size };
+      // Retornar como GWLValue para que mostrar() pueda procesarlo
+      return { type: 'object', value: uiObj };
     });
 
     this.registerNativeFunction('texto', ['contenido'], (args) => {
-      return { type: 'ui_text', content: args[0].value };
+      const uiObj = { type: 'ui_text', content: args[0].value };
+      return { type: 'object', value: uiObj };
     });
 
     this.registerNativeFunction('boton', ['etiqueta'], (args) => {
-      return { type: 'ui_button', label: args[0].value };
+      const uiObj = { type: 'ui_button', label: args[0].value };
+      return { type: 'object', value: uiObj };
     });
 
     this.registerNativeFunction('entrada', ['placeholder'], (args) => {
-      return { type: 'ui_input', placeholder: args[0].value || '' };
+      const uiObj = { type: 'ui_input', placeholder: args[0].value || '' };
+      return { type: 'object', value: uiObj };
     });
   }
 
