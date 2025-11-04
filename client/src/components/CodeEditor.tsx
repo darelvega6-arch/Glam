@@ -55,7 +55,7 @@ export default function CodeEditor({
             {lineCount} líneas
           </span>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <Button
             size="sm"
@@ -90,8 +90,8 @@ export default function CodeEditor({
           </Button>
         </div>
       </div>
-      
-      <div className="flex-1 flex overflow-hidden">
+
+      <div className="flex-1 flex overflow-auto">
         <div className="w-12 bg-muted/30 flex flex-col items-center py-4 text-xs text-muted-foreground font-mono select-none border-r">
           {Array.from({ length: lineCount }, (_, i) => (
             <div key={i} className="h-6 flex items-center">
@@ -99,14 +99,14 @@ export default function CodeEditor({
             </div>
           ))}
         </div>
-        
+
         <textarea
           value={code}
           onChange={handleCodeChange}
           readOnly={readOnly}
           data-testid="textarea-code-editor"
-          className="flex-1 p-4 font-mono text-sm bg-transparent resize-none focus:outline-none focus:ring-0"
-          placeholder="// Escribe tu código GWL+ aquí..."
+          className="flex-1 p-4 font-mono text-sm bg-transparent resize-none focus:outline-none focus:ring-0 min-h-full"
+          placeholder="# Escribe tu código GWL+ aquí..."
           spellCheck={false}
         />
       </div>

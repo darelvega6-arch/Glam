@@ -138,8 +138,8 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
         </div>
       </header>
       
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-0 overflow-hidden">
-        <div className="h-full border-r">
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-0">
+        <div className="h-full border-r overflow-auto">
           <CodeEditor
             initialCode={code}
             onCodeChange={handleCodeChange}
@@ -147,7 +147,7 @@ export default function EditorPage({ onBack, projectId }: EditorPageProps) {
           />
         </div>
         
-        <div className="h-full">
+        <div className="h-full overflow-auto">
           <PreviewPanel
             html={output.html}
             css={output.css}

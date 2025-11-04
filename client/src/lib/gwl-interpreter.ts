@@ -7,7 +7,7 @@ export interface GWLParseResult {
 }
 
 interface GWLValue {
-  type: 'string' | 'number' | 'boolean' | 'function' | 'object' | 'array' | 'element';
+  type: 'string' | 'number' | 'boolean' | 'function' | 'object' | 'array' | 'null';
   value: any;
 }
 
@@ -26,7 +26,7 @@ interface GWLFunction {
 class GWLRuntime {
   private globalScope: GWLScope;
   private currentScope: GWLScope;
-  private elements: any[] = [];
+  private uiCommands: any[] = [];
   
   constructor() {
     this.globalScope = {
@@ -38,33 +38,68 @@ class GWLRuntime {
   }
 
   private initBuiltins() {
-    // Funciones nativas del lenguaje
-    this.globalScope.functions.set('print', {
-      params: ['value'],
-      body: [],
-      scope: this.globalScope,
+    // Funciones nativas de UI
+    this.registerNativeFunction('crear_contenedor', ['id'], (args) => {
+      return { type: 'ui_container', id: args[0].value, children: [] };
     });
     
-    this.globalScope.functions.set('len', {
-      params: ['collection'],
+    this.registerNativeFunction('agregar_titulo', ['texto', 'nivel'], (args) => {
+      const nivel = args[1] ? args[1].value : 1;
+      return { type: 'ui_heading', text: args[0].value, level: nivel };
+    });
+    
+    this.registerNativeFunction('agregar_texto', ['contenido'], (args) => {
+      return { type: 'ui_text', content: args[0].value };
+    });
+    
+    this.registerNativeFunction('agregar_boton', ['etiqueta'], (args) => {
+      return { type: 'ui_button', label: args[0].value };
+    });
+    
+    this.registerNativeFunction('agregar_entrada', ['placeholder'], (args) => {
+      return { type: 'ui_input', placeholder: args[0].value };
+    });
+    
+    this.registerNativeFunction('mostrar', ['vista'], (args) => {
+      this.uiCommands.push(args[0]);
+      return { type: 'null', value: null };
+    });
+    
+    this.registerNativeFunction('imprimir', ['valor'], (args) => {
+      console.log(args[0].value);
+      return { type: 'null', value: null };
+    });
+    
+    this.registerNativeFunction('str', ['valor'], (args) => {
+      return { type: 'string', value: String(args[0].value) };
+    });
+  }
+
+  private registerNativeFunction(name: string, params: string[], handler: (args: GWLValue[]) => any) {
+    this.globalScope.functions.set(name, {
+      params,
       body: [],
       scope: this.globalScope,
-    });
+      native: handler,
+    } as any);
   }
 
   execute(ast: any[]): any {
+    this.uiCommands = [];
     for (const node of ast) {
       this.executeNode(node);
     }
-    return this.elements;
+    return this.uiCommands;
   }
 
   private executeNode(node: any): GWLValue | null {
+    if (!node) return null;
+    
     switch (node.type) {
-      case 'variable_declaration':
-        return this.executeVarDeclaration(node);
-      case 'function_declaration':
-        return this.executeFunctionDeclaration(node);
+      case 'variable_assignment':
+        return this.executeVarAssignment(node);
+      case 'function_definition':
+        return this.executeFunctionDefinition(node);
       case 'function_call':
         return this.executeFunctionCall(node);
       case 'if_statement':
@@ -73,24 +108,34 @@ class GWLRuntime {
         return this.executeForLoop(node);
       case 'while_loop':
         return this.executeWhileLoop(node);
-      case 'element_creation':
-        return this.executeElementCreation(node);
       case 'binary_operation':
         return this.executeBinaryOp(node);
       case 'literal':
         return node.value;
+      case 'variable_reference':
+        return this.getVariable(node.name);
+      case 'block':
+        return this.executeBlock(node);
       default:
         return null;
     }
   }
 
-  private executeVarDeclaration(node: any): GWLValue | null {
+  private executeBlock(node: any): GWLValue | null {
+    let result: GWLValue | null = null;
+    for (const stmt of node.statements) {
+      result = this.executeNode(stmt);
+    }
+    return result;
+  }
+
+  private executeVarAssignment(node: any): GWLValue | null {
     const value = this.executeNode(node.value);
     this.currentScope.variables.set(node.name, value!);
     return null;
   }
 
-  private executeFunctionDeclaration(node: any): GWLValue | null {
+  private executeFunctionDefinition(node: any): GWLValue | null {
     this.currentScope.functions.set(node.name, {
       params: node.params,
       body: node.body,
@@ -105,6 +150,17 @@ class GWLRuntime {
       throw new Error(`Función '${node.name}' no definida`);
     }
 
+    // Evaluar argumentos
+    const args: GWLValue[] = [];
+    for (const arg of node.args) {
+      args.push(this.executeNode(arg)!);
+    }
+
+    // Si es función nativa
+    if ((func as any).native) {
+      return (func as any).native(args);
+    }
+
     // Crear nuevo scope para la función
     const funcScope: GWLScope = {
       variables: new Map(),
@@ -112,10 +168,9 @@ class GWLRuntime {
       parent: func.scope,
     };
 
-    // Evaluar argumentos y asignar parámetros
+    // Asignar parámetros
     for (let i = 0; i < func.params.length; i++) {
-      const argValue = this.executeNode(node.args[i]);
-      funcScope.variables.set(func.params[i], argValue!);
+      funcScope.variables.set(func.params[i], args[i] || { type: 'null', value: null });
     }
 
     const prevScope = this.currentScope;
@@ -124,6 +179,9 @@ class GWLRuntime {
     let result: GWLValue | null = null;
     for (const stmt of func.body) {
       result = this.executeNode(stmt);
+      if (stmt.type === 'return_statement') {
+        break;
+      }
     }
 
     this.currentScope = prevScope;
@@ -133,13 +191,9 @@ class GWLRuntime {
   private executeIfStatement(node: any): GWLValue | null {
     const condition = this.executeNode(node.condition);
     if (this.isTruthy(condition)) {
-      for (const stmt of node.thenBranch) {
-        this.executeNode(stmt);
-      }
+      return this.executeBlock(node.thenBranch);
     } else if (node.elseBranch) {
-      for (const stmt of node.elseBranch) {
-        this.executeNode(stmt);
-      }
+      return this.executeBlock(node.elseBranch);
     }
     return null;
   }
@@ -147,44 +201,21 @@ class GWLRuntime {
   private executeForLoop(node: any): GWLValue | null {
     const collection = this.executeNode(node.collection);
     if (collection?.type !== 'array') {
-      throw new Error('for loop requiere un array');
+      throw new Error('para loop requiere un array');
     }
 
     for (const item of collection.value) {
       this.currentScope.variables.set(node.variable, item);
-      for (const stmt of node.body) {
-        this.executeNode(stmt);
-      }
+      this.executeBlock(node.body);
     }
     return null;
   }
 
   private executeWhileLoop(node: any): GWLValue | null {
     while (this.isTruthy(this.executeNode(node.condition))) {
-      for (const stmt of node.body) {
-        this.executeNode(stmt);
-      }
+      this.executeBlock(node.body);
     }
     return null;
-  }
-
-  private executeElementCreation(node: any): GWLValue {
-    const element = {
-      tag: node.tag,
-      props: {},
-      children: [],
-    };
-
-    for (const [key, value] of Object.entries(node.props || {})) {
-      element.props[key] = this.executeNode(value as any);
-    }
-
-    for (const child of node.children || []) {
-      element.children.push(this.executeNode(child));
-    }
-
-    this.elements.push(element);
-    return { type: 'element', value: element };
   }
 
   private executeBinaryOp(node: any): GWLValue {
@@ -208,6 +239,12 @@ class GWLRuntime {
         return { type: 'boolean', value: this.lessThan(left!, right!) };
       case '>':
         return { type: 'boolean', value: this.greaterThan(left!, right!) };
+      case 'y':
+      case 'and':
+        return { type: 'boolean', value: this.isTruthy(left) && this.isTruthy(right) };
+      case 'o':
+      case 'or':
+        return { type: 'boolean', value: this.isTruthy(left) || this.isTruthy(right) };
       default:
         throw new Error(`Operador desconocido: ${node.operator}`);
     }
@@ -268,6 +305,7 @@ class GWLRuntime {
     if (value.type === 'boolean') return value.value;
     if (value.type === 'number') return value.value !== 0;
     if (value.type === 'string') return value.value !== '';
+    if (value.type === 'null') return false;
     return true;
   }
 
@@ -281,46 +319,25 @@ class GWLRuntime {
     }
     return null;
   }
+
+  private getVariable(name: string): GWLValue {
+    let scope: GWLScope | undefined = this.currentScope;
+    while (scope) {
+      if (scope.variables.has(name)) {
+        return scope.variables.get(name)!;
+      }
+      scope = scope.parent;
+    }
+    throw new Error(`Variable '${name}' no definida`);
+  }
 }
 
 class GWLParser {
-  private tokens: string[];
+  private lines: string[];
   private current = 0;
 
   constructor(code: string) {
-    this.tokens = this.tokenize(code);
-  }
-
-  private tokenize(code: string): string[] {
-    // Tokenizador simple
-    const tokens: string[] = [];
-    let current = '';
-    
-    for (let i = 0; i < code.length; i++) {
-      const char = code[i];
-      
-      if (char === ' ' || char === '\n' || char === '\t') {
-        if (current) {
-          tokens.push(current);
-          current = '';
-        }
-        continue;
-      }
-      
-      if ('(){}[],:=+-*/<>!'.includes(char)) {
-        if (current) {
-          tokens.push(current);
-          current = '';
-        }
-        tokens.push(char);
-        continue;
-      }
-      
-      current += char;
-    }
-    
-    if (current) tokens.push(current);
-    return tokens;
+    this.lines = code.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
   }
 
   parse(): any[] {
@@ -333,67 +350,64 @@ class GWLParser {
   }
 
   private parseStatement(): any {
-    const token = this.peek();
+    const line = this.peek();
     
-    if (token === 'let' || token === 'var') {
-      return this.parseVarDeclaration();
+    if (line.startsWith('definir ')) {
+      return this.parseFunctionDefinition();
     }
-    if (token === 'func') {
-      return this.parseFunctionDeclaration();
-    }
-    if (token === 'if') {
+    if (line.startsWith('si ')) {
       return this.parseIfStatement();
     }
-    if (token === 'for') {
+    if (line.startsWith('para ')) {
       return this.parseForLoop();
     }
-    if (token === 'while') {
+    if (line.startsWith('mientras ')) {
       return this.parseWhileLoop();
     }
-    if (token === 'render') {
-      return this.parseRenderBlock();
+    if (line.includes('=') && !line.includes('==')) {
+      return this.parseVarAssignment();
     }
     
-    // Intentar parsear como expresión
     return this.parseExpression();
   }
 
-  private parseVarDeclaration(): any {
-    this.advance(); // consume 'let' o 'var'
-    const name = this.advance();
-    this.expect('=');
-    const value = this.parseExpression();
+  private parseVarAssignment(): any {
+    const line = this.advance();
+    const [name, ...valueParts] = line.split('=');
+    const valueStr = valueParts.join('=').trim();
     
     return {
-      type: 'variable_declaration',
-      name,
-      value,
+      type: 'variable_assignment',
+      name: name.trim(),
+      value: this.parseExpressionFromString(valueStr),
     };
   }
 
-  private parseFunctionDeclaration(): any {
-    this.advance(); // consume 'func'
-    const name = this.advance();
-    this.expect('(');
-    const params: string[] = [];
+  private parseFunctionDefinition(): any {
+    const line = this.advance();
+    const match = line.match(/definir\s+(\w+)\s*\((.*?)\):/);
     
-    while (this.peek() !== ')') {
-      params.push(this.advance());
-      if (this.peek() === ',') this.advance();
+    if (!match) {
+      throw new Error(`Sintaxis de función inválida: ${line}`);
     }
     
-    this.expect(')');
-    this.expect('{');
+    const name = match[1];
+    const paramsStr = match[2].trim();
+    const params = paramsStr ? paramsStr.split(',').map(p => p.trim()) : [];
     
     const body: any[] = [];
-    while (this.peek() !== '}') {
+    let indent = this.getIndent(this.peek());
+    
+    while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
       body.push(this.parseStatement());
     }
     
-    this.expect('}');
+    if (this.peek() === 'fin') {
+      this.advance();
+    }
     
     return {
-      type: 'function_declaration',
+      type: 'function_definition',
       name,
       params,
       body,
@@ -401,215 +415,113 @@ class GWLParser {
   }
 
   private parseIfStatement(): any {
-    this.advance(); // consume 'if'
-    this.expect('(');
-    const condition = this.parseExpression();
-    this.expect(')');
-    this.expect('{');
+    const line = this.advance();
+    const conditionStr = line.substring(3, line.length - 1).trim();
+    const condition = this.parseExpressionFromString(conditionStr);
     
-    const thenBranch: any[] = [];
-    while (this.peek() !== '}') {
-      thenBranch.push(this.parseStatement());
+    const thenStatements: any[] = [];
+    let indent = this.getIndent(this.peek());
+    
+    while (!this.isAtEnd() && !this.peek().startsWith('sino') && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
+      thenStatements.push(this.parseStatement());
     }
-    this.expect('}');
     
-    let elseBranch = null;
-    if (this.peek() === 'else') {
+    let elseStatements = null;
+    if (this.peek()?.startsWith('sino')) {
       this.advance();
-      this.expect('{');
-      elseBranch = [];
-      while (this.peek() !== '}') {
-        elseBranch.push(this.parseStatement());
+      elseStatements = [];
+      while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
+        elseStatements.push(this.parseStatement());
       }
-      this.expect('}');
+    }
+    
+    if (this.peek() === 'fin') {
+      this.advance();
     }
     
     return {
       type: 'if_statement',
       condition,
-      thenBranch,
-      elseBranch,
+      thenBranch: { type: 'block', statements: thenStatements },
+      elseBranch: elseStatements ? { type: 'block', statements: elseStatements } : null,
     };
   }
 
   private parseForLoop(): any {
-    this.advance(); // consume 'for'
-    this.expect('(');
-    const variable = this.advance();
-    this.expect('in');
-    const collection = this.parseExpression();
-    this.expect(')');
-    this.expect('{');
+    const line = this.advance();
+    const match = line.match(/para\s+(\w+)\s+en\s+(.+):/);
     
-    const body: any[] = [];
-    while (this.peek() !== '}') {
-      body.push(this.parseStatement());
+    if (!match) {
+      throw new Error(`Sintaxis de para inválida: ${line}`);
     }
-    this.expect('}');
+    
+    const variable = match[1];
+    const collection = this.parseExpressionFromString(match[2]);
+    
+    const bodyStatements: any[] = [];
+    let indent = this.getIndent(this.peek());
+    
+    while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
+      bodyStatements.push(this.parseStatement());
+    }
+    
+    if (this.peek() === 'fin') {
+      this.advance();
+    }
     
     return {
       type: 'for_loop',
       variable,
       collection,
-      body,
+      body: { type: 'block', statements: bodyStatements },
     };
   }
 
   private parseWhileLoop(): any {
-    this.advance(); // consume 'while'
-    this.expect('(');
-    const condition = this.parseExpression();
-    this.expect(')');
-    this.expect('{');
+    const line = this.advance();
+    const conditionStr = line.substring(9, line.length - 1).trim();
+    const condition = this.parseExpressionFromString(conditionStr);
     
-    const body: any[] = [];
-    while (this.peek() !== '}') {
-      body.push(this.parseStatement());
+    const bodyStatements: any[] = [];
+    let indent = this.getIndent(this.peek());
+    
+    while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
+      bodyStatements.push(this.parseStatement());
     }
-    this.expect('}');
+    
+    if (this.peek() === 'fin') {
+      this.advance();
+    }
     
     return {
       type: 'while_loop',
       condition,
-      body,
-    };
-  }
-
-  private parseRenderBlock(): any {
-    this.advance(); // consume 'render'
-    this.expect('{');
-    
-    const elements: any[] = [];
-    while (this.peek() !== '}') {
-      elements.push(this.parseElement());
-    }
-    this.expect('}');
-    
-    return {
-      type: 'render_block',
-      elements,
-    };
-  }
-
-  private parseElement(): any {
-    const tag = this.advance();
-    const props: any = {};
-    const children: any[] = [];
-    
-    if (this.peek() === '(') {
-      this.advance();
-      while (this.peek() !== ')') {
-        const key = this.advance();
-        this.expect('=');
-        props[key] = this.parseExpression();
-        if (this.peek() === ',') this.advance();
-      }
-      this.expect(')');
-    }
-    
-    if (this.peek() === '{') {
-      this.advance();
-      while (this.peek() !== '}') {
-        children.push(this.parseElement());
-      }
-      this.expect('}');
-    }
-    
-    return {
-      type: 'element_creation',
-      tag,
-      props,
-      children,
+      body: { type: 'block', statements: bodyStatements },
     };
   }
 
   private parseExpression(): any {
-    return this.parseComparison();
+    const line = this.advance();
+    return this.parseExpressionFromString(line);
   }
 
-  private parseComparison(): any {
-    let left = this.parseAddition();
+  private parseExpressionFromString(str: string): any {
+    str = str.trim();
     
-    while (['==', '!=', '<', '>'].includes(this.peek())) {
-      const operator = this.advance();
-      const right = this.parseAddition();
-      left = {
-        type: 'binary_operation',
-        operator,
-        left,
-        right,
-      };
-    }
-    
-    return left;
-  }
-
-  private parseAddition(): any {
-    let left = this.parseMultiplication();
-    
-    while (['+', '-'].includes(this.peek())) {
-      const operator = this.advance();
-      const right = this.parseMultiplication();
-      left = {
-        type: 'binary_operation',
-        operator,
-        left,
-        right,
-      };
-    }
-    
-    return left;
-  }
-
-  private parseMultiplication(): any {
-    let left = this.parsePrimary();
-    
-    while (['*', '/'].includes(this.peek())) {
-      const operator = this.advance();
-      const right = this.parsePrimary();
-      left = {
-        type: 'binary_operation',
-        operator,
-        left,
-        right,
-      };
-    }
-    
-    return left;
-  }
-
-  private parsePrimary(): any {
-    const token = this.peek();
-    
-    // Números
-    if (!isNaN(Number(token))) {
-      this.advance();
-      return { type: 'literal', value: { type: 'number', value: Number(token) } };
-    }
-    
-    // Strings
-    if (token.startsWith('"') || token.startsWith("'")) {
-      this.advance();
-      const value = token.slice(1, -1);
-      return { type: 'literal', value: { type: 'string', value } };
-    }
-    
-    // Booleanos
-    if (token === 'true' || token === 'false') {
-      this.advance();
-      return { type: 'literal', value: { type: 'boolean', value: token === 'true' } };
-    }
-    
-    // Llamadas a función o variables
-    const name = this.advance();
-    if (this.peek() === '(') {
-      this.advance();
+    // Llamadas a función
+    if (str.includes('(') && str.includes(')')) {
+      const parenIndex = str.indexOf('(');
+      const name = str.substring(0, parenIndex).trim();
+      const argsStr = str.substring(parenIndex + 1, str.lastIndexOf(')')).trim();
+      
       const args: any[] = [];
-      while (this.peek() !== ')') {
-        args.push(this.parseExpression());
-        if (this.peek() === ',') this.advance();
+      if (argsStr) {
+        const argParts = this.splitArgs(argsStr);
+        for (const arg of argParts) {
+          args.push(this.parseExpressionFromString(arg.trim()));
+        }
       }
-      this.expect(')');
+      
       return {
         type: 'function_call',
         name,
@@ -617,29 +529,93 @@ class GWLParser {
       };
     }
     
+    // Operaciones binarias
+    for (const op of ['==', '!=', '<=', '>=', '<', '>', '+', '-', '*', '/', 'y', 'o', 'and', 'or']) {
+      if (str.includes(op)) {
+        const parts = str.split(op);
+        if (parts.length === 2) {
+          return {
+            type: 'binary_operation',
+            operator: op,
+            left: this.parseExpressionFromString(parts[0].trim()),
+            right: this.parseExpressionFromString(parts[1].trim()),
+          };
+        }
+      }
+    }
+    
+    // Números
+    if (!isNaN(Number(str))) {
+      return { type: 'literal', value: { type: 'number', value: Number(str) } };
+    }
+    
+    // Strings
+    if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
+      return { type: 'literal', value: { type: 'string', value: str.slice(1, -1) } };
+    }
+    
+    // Booleanos
+    if (str === 'verdadero' || str === 'falso') {
+      return { type: 'literal', value: { type: 'boolean', value: str === 'verdadero' } };
+    }
+    
+    // Arrays
+    if (str.startsWith('[') && str.endsWith(']')) {
+      const itemsStr = str.slice(1, -1).trim();
+      const items = itemsStr ? this.splitArgs(itemsStr).map(item => this.parseExpressionFromString(item.trim())) : [];
+      const values = items.map(item => item.value || item);
+      return { type: 'literal', value: { type: 'array', value: values } };
+    }
+    
+    // Variables
     return {
       type: 'variable_reference',
-      name,
+      name: str,
     };
   }
 
+  private splitArgs(str: string): string[] {
+    const args: string[] = [];
+    let current = '';
+    let depth = 0;
+    
+    for (let i = 0; i < str.length; i++) {
+      const char = str[i];
+      if (char === '(' || char === '[') depth++;
+      if (char === ')' || char === ']') depth--;
+      
+      if (char === ',' && depth === 0) {
+        args.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    if (current) args.push(current);
+    return args;
+  }
+
+  private getIndent(line: string): number {
+    if (!line) return 0;
+    let count = 0;
+    for (const char of line) {
+      if (char === ' ') count++;
+      else break;
+    }
+    return count;
+  }
+
   private peek(): string {
-    return this.tokens[this.current] || '';
+    return this.lines[this.current] || '';
   }
 
   private advance(): string {
-    return this.tokens[this.current++] || '';
-  }
-
-  private expect(token: string): void {
-    if (this.peek() !== token) {
-      throw new Error(`Se esperaba '${token}', se encontró '${this.peek()}'`);
-    }
-    this.advance();
+    return this.lines[this.current++] || '';
   }
 
   private isAtEnd(): boolean {
-    return this.current >= this.tokens.length;
+    return this.current >= this.lines.length;
   }
 }
 
@@ -653,10 +629,9 @@ export function interpretGWL(code: string): GWLParseResult {
     const parser = new GWLParser(code);
     const ast = parser.parse();
     const runtime = new GWLRuntime();
-    const elements = runtime.execute(ast);
+    const uiCommands = runtime.execute(ast);
     
-    // Convertir elementos a HTML
-    html = elementsToHTML(elements);
+    html = uiCommandsToHTML(uiCommands);
     
     if (!html) {
       html = '<div class="gwl-preview"><h2>Vista Previa GWL+</h2><p>Escribe tu código para comenzar...</p></div>';
@@ -670,130 +645,135 @@ export function interpretGWL(code: string): GWLParseResult {
   return { html, css, js, errors };
 }
 
-function elementsToHTML(elements: any[]): string {
+function uiCommandsToHTML(commands: any[]): string {
   let html = '';
-  for (const element of elements) {
-    if (element.type === 'element') {
-      html += renderElement(element.value);
-    }
+  for (const cmd of commands) {
+    html += renderUICommand(cmd);
   }
   return html;
 }
 
-function renderElement(element: any): string {
-  const { tag, props, children } = element;
-  let html = `<${tag}`;
+function renderUICommand(cmd: any): string {
+  if (!cmd || !cmd.type) return '';
   
-  for (const [key, value] of Object.entries(props)) {
-    html += ` ${key}="${value}"`;
-  }
-  
-  html += '>';
-  
-  for (const child of children) {
-    if (child?.type === 'element') {
-      html += renderElement(child.value);
-    } else if (child?.type === 'string') {
-      html += child.value;
-    }
-  }
-  
-  html += `</${tag}>`;
-  return html;
-}
-
-export const exampleGWLCode = `// Lenguaje de Programación GWL+
-// Variables y tipos
-let nombre = "Usuario"
-let contador = 0
-let activo = true
-
-// Función para calcular factorial
-func factorial(n) {
-  if (n == 0) {
-    return 1
-  } else {
-    return n * factorial(n - 1)
+  switch (cmd.type) {
+    case 'ui_container':
+      return `<div class="gwl-container" id="${cmd.id}">${cmd.children.map(renderUICommand).join('')}</div>`;
+    case 'ui_heading':
+      return `<h${cmd.level} class="gwl-heading">${cmd.text}</h${cmd.level}>`;
+    case 'ui_text':
+      return `<p class="gwl-text">${cmd.content}</p>`;
+    case 'ui_button':
+      return `<button class="gwl-button">${cmd.label}</button>`;
+    case 'ui_input':
+      return `<input class="gwl-input" placeholder="${cmd.placeholder}" />`;
+    default:
+      return '';
   }
 }
 
-// Arrays y loops
-let numeros = [1, 2, 3, 4, 5]
-let suma = 0
+export const exampleGWLCode = `# Lenguaje GWL+ - Sintaxis Única
+# Variables
+titulo = "Calculadora GWL+"
+contador = 0
+numeros = [1, 2, 3, 4, 5]
 
-for (num in numeros) {
-  suma = suma + num
-}
+# Función para sumar array
+definir sumar_lista(lista):
+    total = 0
+    para num en lista:
+        total = total + num
+    fin
+    retornar total
+fin
 
-// Condicionales
-if (suma > 10) {
-  print("Suma es mayor que 10")
-}
+# Función para factorial
+definir factorial(n):
+    si n == 0:
+        retornar 1
+    sino:
+        retornar n * factorial(n - 1)
+    fin
+fin
 
-// Renderizado de UI
-render {
-  div(class="container") {
-    h1 { "Calculadora GWL+" }
-    p { "Factorial de 5: " + factorial(5) }
-    p { "Suma del array: " + suma }
-  }
-}
+# Calcular valores
+suma_total = sumar_lista(numeros)
+fact_5 = factorial(5)
+
+# Crear interfaz de usuario
+definir crear_app():
+    crear_contenedor("app"):
+        agregar_titulo(titulo, nivel=1)
+        agregar_texto("Suma del array: " + str(suma_total))
+        agregar_texto("Factorial de 5: " + str(fact_5))
+        agregar_boton("Click aquí")
+    fin
+fin
+
+# Mostrar la aplicación
+mostrar(crear_app())
 `;
 
 export const tutorialExamples = {
-  basic: `// Tutorial 1: Variables y Tipos
-let mensaje = "Hola GWL+"
-let numero = 42
-let activo = true
+  basic: `# Tutorial 1: Variables y Tipos
+nombre = "Juan"
+edad = 25
+activo = verdadero
 
-print(mensaje)
-print(numero)`,
+imprimir(nombre)
+imprimir(edad)`,
 
-  functions: `// Tutorial 2: Funciones
-func saludar(nombre) {
-  return "Hola, " + nombre + "!"
-}
+  functions: `# Tutorial 2: Funciones
+definir saludar(nombre):
+    retornar "Hola, " + nombre + "!"
+fin
 
-func suma(a, b) {
-  return a + b
-}
+definir sumar(a, b):
+    retornar a + b
+fin
 
-let resultado = suma(10, 20)
-print(saludar("Mundo"))
-print(resultado)`,
+mensaje = saludar("Mundo")
+resultado = sumar(10, 20)
 
-  control: `// Tutorial 3: Control de Flujo
-let edad = 18
+imprimir(mensaje)
+imprimir(resultado)`,
 
-if (edad >= 18) {
-  print("Eres mayor de edad")
-} else {
-  print("Eres menor de edad")
-}
+  control: `# Tutorial 3: Control de Flujo
+edad = 18
 
-let i = 0
-while (i < 5) {
-  print(i)
-  i = i + 1
-}`,
+si edad >= 18:
+    imprimir("Mayor de edad")
+sino:
+    imprimir("Menor de edad")
+fin
 
-  complete: `// Tutorial 4: Programa Completo
-let items = ["Manzana", "Banana", "Naranja"]
-let total = 0
+contador = 0
+mientras contador < 5:
+    imprimir(contador)
+    contador = contador + 1
+fin`,
 
-func procesar(lista) {
-  for (item in lista) {
-    total = total + 1
-  }
-  return total
-}
+  complete: `# Tutorial 4: Aplicación Completa
+items = ["Manzana", "Banana", "Naranja"]
+total = 0
 
-let cantidad = procesar(items)
+definir contar_items(lista):
+    cuenta = 0
+    para item en lista:
+        cuenta = cuenta + 1
+    fin
+    retornar cuenta
+fin
 
-render {
-  div(class="app") {
-    h1 { "Mi Aplicación GWL+" }
-    p { "Total de items: " + cantidad }
-  }
-}`,
+cantidad = contar_items(items)
+
+definir mi_app():
+    crear_contenedor("app"):
+        agregar_titulo("Mi Aplicación", nivel=1)
+        agregar_texto("Total: " + str(cantidad))
+        agregar_boton("Actualizar")
+    fin
+fin
+
+mostrar(mi_app())`,
 };
