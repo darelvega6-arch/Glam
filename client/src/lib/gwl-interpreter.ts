@@ -1,3 +1,4 @@
+
 export interface GWLParseResult {
   html: string;
   css: string;
@@ -5,15 +6,641 @@ export interface GWLParseResult {
   errors: string[];
 }
 
-interface Component {
-  name: string;
-  props: string[];
-  body: string[];
+interface GWLValue {
+  type: 'string' | 'number' | 'boolean' | 'function' | 'object' | 'array' | 'element';
+  value: any;
 }
 
-interface Style {
-  name: string;
-  rules: string;
+interface GWLScope {
+  variables: Map<string, GWLValue>;
+  functions: Map<string, GWLFunction>;
+  parent?: GWLScope;
+}
+
+interface GWLFunction {
+  params: string[];
+  body: string[];
+  scope: GWLScope;
+}
+
+class GWLRuntime {
+  private globalScope: GWLScope;
+  private currentScope: GWLScope;
+  private elements: any[] = [];
+  
+  constructor() {
+    this.globalScope = {
+      variables: new Map(),
+      functions: new Map(),
+    };
+    this.currentScope = this.globalScope;
+    this.initBuiltins();
+  }
+
+  private initBuiltins() {
+    // Funciones nativas del lenguaje
+    this.globalScope.functions.set('print', {
+      params: ['value'],
+      body: [],
+      scope: this.globalScope,
+    });
+    
+    this.globalScope.functions.set('len', {
+      params: ['collection'],
+      body: [],
+      scope: this.globalScope,
+    });
+  }
+
+  execute(ast: any[]): any {
+    for (const node of ast) {
+      this.executeNode(node);
+    }
+    return this.elements;
+  }
+
+  private executeNode(node: any): GWLValue | null {
+    switch (node.type) {
+      case 'variable_declaration':
+        return this.executeVarDeclaration(node);
+      case 'function_declaration':
+        return this.executeFunctionDeclaration(node);
+      case 'function_call':
+        return this.executeFunctionCall(node);
+      case 'if_statement':
+        return this.executeIfStatement(node);
+      case 'for_loop':
+        return this.executeForLoop(node);
+      case 'while_loop':
+        return this.executeWhileLoop(node);
+      case 'element_creation':
+        return this.executeElementCreation(node);
+      case 'binary_operation':
+        return this.executeBinaryOp(node);
+      case 'literal':
+        return node.value;
+      default:
+        return null;
+    }
+  }
+
+  private executeVarDeclaration(node: any): GWLValue | null {
+    const value = this.executeNode(node.value);
+    this.currentScope.variables.set(node.name, value!);
+    return null;
+  }
+
+  private executeFunctionDeclaration(node: any): GWLValue | null {
+    this.currentScope.functions.set(node.name, {
+      params: node.params,
+      body: node.body,
+      scope: this.currentScope,
+    });
+    return null;
+  }
+
+  private executeFunctionCall(node: any): GWLValue | null {
+    const func = this.findFunction(node.name);
+    if (!func) {
+      throw new Error(`Función '${node.name}' no definida`);
+    }
+
+    // Crear nuevo scope para la función
+    const funcScope: GWLScope = {
+      variables: new Map(),
+      functions: new Map(),
+      parent: func.scope,
+    };
+
+    // Evaluar argumentos y asignar parámetros
+    for (let i = 0; i < func.params.length; i++) {
+      const argValue = this.executeNode(node.args[i]);
+      funcScope.variables.set(func.params[i], argValue!);
+    }
+
+    const prevScope = this.currentScope;
+    this.currentScope = funcScope;
+
+    let result: GWLValue | null = null;
+    for (const stmt of func.body) {
+      result = this.executeNode(stmt);
+    }
+
+    this.currentScope = prevScope;
+    return result;
+  }
+
+  private executeIfStatement(node: any): GWLValue | null {
+    const condition = this.executeNode(node.condition);
+    if (this.isTruthy(condition)) {
+      for (const stmt of node.thenBranch) {
+        this.executeNode(stmt);
+      }
+    } else if (node.elseBranch) {
+      for (const stmt of node.elseBranch) {
+        this.executeNode(stmt);
+      }
+    }
+    return null;
+  }
+
+  private executeForLoop(node: any): GWLValue | null {
+    const collection = this.executeNode(node.collection);
+    if (collection?.type !== 'array') {
+      throw new Error('for loop requiere un array');
+    }
+
+    for (const item of collection.value) {
+      this.currentScope.variables.set(node.variable, item);
+      for (const stmt of node.body) {
+        this.executeNode(stmt);
+      }
+    }
+    return null;
+  }
+
+  private executeWhileLoop(node: any): GWLValue | null {
+    while (this.isTruthy(this.executeNode(node.condition))) {
+      for (const stmt of node.body) {
+        this.executeNode(stmt);
+      }
+    }
+    return null;
+  }
+
+  private executeElementCreation(node: any): GWLValue {
+    const element = {
+      tag: node.tag,
+      props: {},
+      children: [],
+    };
+
+    for (const [key, value] of Object.entries(node.props || {})) {
+      element.props[key] = this.executeNode(value as any);
+    }
+
+    for (const child of node.children || []) {
+      element.children.push(this.executeNode(child));
+    }
+
+    this.elements.push(element);
+    return { type: 'element', value: element };
+  }
+
+  private executeBinaryOp(node: any): GWLValue {
+    const left = this.executeNode(node.left);
+    const right = this.executeNode(node.right);
+
+    switch (node.operator) {
+      case '+':
+        return this.add(left!, right!);
+      case '-':
+        return this.subtract(left!, right!);
+      case '*':
+        return this.multiply(left!, right!);
+      case '/':
+        return this.divide(left!, right!);
+      case '==':
+        return { type: 'boolean', value: this.equals(left!, right!) };
+      case '!=':
+        return { type: 'boolean', value: !this.equals(left!, right!) };
+      case '<':
+        return { type: 'boolean', value: this.lessThan(left!, right!) };
+      case '>':
+        return { type: 'boolean', value: this.greaterThan(left!, right!) };
+      default:
+        throw new Error(`Operador desconocido: ${node.operator}`);
+    }
+  }
+
+  private add(left: GWLValue, right: GWLValue): GWLValue {
+    if (left.type === 'number' && right.type === 'number') {
+      return { type: 'number', value: left.value + right.value };
+    }
+    if (left.type === 'string' || right.type === 'string') {
+      return { type: 'string', value: String(left.value) + String(right.value) };
+    }
+    throw new Error('Operación + no válida');
+  }
+
+  private subtract(left: GWLValue, right: GWLValue): GWLValue {
+    if (left.type === 'number' && right.type === 'number') {
+      return { type: 'number', value: left.value - right.value };
+    }
+    throw new Error('Operación - requiere números');
+  }
+
+  private multiply(left: GWLValue, right: GWLValue): GWLValue {
+    if (left.type === 'number' && right.type === 'number') {
+      return { type: 'number', value: left.value * right.value };
+    }
+    throw new Error('Operación * requiere números');
+  }
+
+  private divide(left: GWLValue, right: GWLValue): GWLValue {
+    if (left.type === 'number' && right.type === 'number') {
+      if (right.value === 0) throw new Error('División por cero');
+      return { type: 'number', value: left.value / right.value };
+    }
+    throw new Error('Operación / requiere números');
+  }
+
+  private equals(left: GWLValue, right: GWLValue): boolean {
+    return left.type === right.type && left.value === right.value;
+  }
+
+  private lessThan(left: GWLValue, right: GWLValue): boolean {
+    if (left.type === 'number' && right.type === 'number') {
+      return left.value < right.value;
+    }
+    throw new Error('Comparación < requiere números');
+  }
+
+  private greaterThan(left: GWLValue, right: GWLValue): boolean {
+    if (left.type === 'number' && right.type === 'number') {
+      return left.value > right.value;
+    }
+    throw new Error('Comparación > requiere números');
+  }
+
+  private isTruthy(value: GWLValue | null): boolean {
+    if (!value) return false;
+    if (value.type === 'boolean') return value.value;
+    if (value.type === 'number') return value.value !== 0;
+    if (value.type === 'string') return value.value !== '';
+    return true;
+  }
+
+  private findFunction(name: string): GWLFunction | null {
+    let scope: GWLScope | undefined = this.currentScope;
+    while (scope) {
+      if (scope.functions.has(name)) {
+        return scope.functions.get(name)!;
+      }
+      scope = scope.parent;
+    }
+    return null;
+  }
+}
+
+class GWLParser {
+  private tokens: string[];
+  private current = 0;
+
+  constructor(code: string) {
+    this.tokens = this.tokenize(code);
+  }
+
+  private tokenize(code: string): string[] {
+    // Tokenizador simple
+    const tokens: string[] = [];
+    let current = '';
+    
+    for (let i = 0; i < code.length; i++) {
+      const char = code[i];
+      
+      if (char === ' ' || char === '\n' || char === '\t') {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
+        continue;
+      }
+      
+      if ('(){}[],:=+-*/<>!'.includes(char)) {
+        if (current) {
+          tokens.push(current);
+          current = '';
+        }
+        tokens.push(char);
+        continue;
+      }
+      
+      current += char;
+    }
+    
+    if (current) tokens.push(current);
+    return tokens;
+  }
+
+  parse(): any[] {
+    const ast: any[] = [];
+    while (!this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) ast.push(stmt);
+    }
+    return ast;
+  }
+
+  private parseStatement(): any {
+    const token = this.peek();
+    
+    if (token === 'let' || token === 'var') {
+      return this.parseVarDeclaration();
+    }
+    if (token === 'func') {
+      return this.parseFunctionDeclaration();
+    }
+    if (token === 'if') {
+      return this.parseIfStatement();
+    }
+    if (token === 'for') {
+      return this.parseForLoop();
+    }
+    if (token === 'while') {
+      return this.parseWhileLoop();
+    }
+    if (token === 'render') {
+      return this.parseRenderBlock();
+    }
+    
+    // Intentar parsear como expresión
+    return this.parseExpression();
+  }
+
+  private parseVarDeclaration(): any {
+    this.advance(); // consume 'let' o 'var'
+    const name = this.advance();
+    this.expect('=');
+    const value = this.parseExpression();
+    
+    return {
+      type: 'variable_declaration',
+      name,
+      value,
+    };
+  }
+
+  private parseFunctionDeclaration(): any {
+    this.advance(); // consume 'func'
+    const name = this.advance();
+    this.expect('(');
+    const params: string[] = [];
+    
+    while (this.peek() !== ')') {
+      params.push(this.advance());
+      if (this.peek() === ',') this.advance();
+    }
+    
+    this.expect(')');
+    this.expect('{');
+    
+    const body: any[] = [];
+    while (this.peek() !== '}') {
+      body.push(this.parseStatement());
+    }
+    
+    this.expect('}');
+    
+    return {
+      type: 'function_declaration',
+      name,
+      params,
+      body,
+    };
+  }
+
+  private parseIfStatement(): any {
+    this.advance(); // consume 'if'
+    this.expect('(');
+    const condition = this.parseExpression();
+    this.expect(')');
+    this.expect('{');
+    
+    const thenBranch: any[] = [];
+    while (this.peek() !== '}') {
+      thenBranch.push(this.parseStatement());
+    }
+    this.expect('}');
+    
+    let elseBranch = null;
+    if (this.peek() === 'else') {
+      this.advance();
+      this.expect('{');
+      elseBranch = [];
+      while (this.peek() !== '}') {
+        elseBranch.push(this.parseStatement());
+      }
+      this.expect('}');
+    }
+    
+    return {
+      type: 'if_statement',
+      condition,
+      thenBranch,
+      elseBranch,
+    };
+  }
+
+  private parseForLoop(): any {
+    this.advance(); // consume 'for'
+    this.expect('(');
+    const variable = this.advance();
+    this.expect('in');
+    const collection = this.parseExpression();
+    this.expect(')');
+    this.expect('{');
+    
+    const body: any[] = [];
+    while (this.peek() !== '}') {
+      body.push(this.parseStatement());
+    }
+    this.expect('}');
+    
+    return {
+      type: 'for_loop',
+      variable,
+      collection,
+      body,
+    };
+  }
+
+  private parseWhileLoop(): any {
+    this.advance(); // consume 'while'
+    this.expect('(');
+    const condition = this.parseExpression();
+    this.expect(')');
+    this.expect('{');
+    
+    const body: any[] = [];
+    while (this.peek() !== '}') {
+      body.push(this.parseStatement());
+    }
+    this.expect('}');
+    
+    return {
+      type: 'while_loop',
+      condition,
+      body,
+    };
+  }
+
+  private parseRenderBlock(): any {
+    this.advance(); // consume 'render'
+    this.expect('{');
+    
+    const elements: any[] = [];
+    while (this.peek() !== '}') {
+      elements.push(this.parseElement());
+    }
+    this.expect('}');
+    
+    return {
+      type: 'render_block',
+      elements,
+    };
+  }
+
+  private parseElement(): any {
+    const tag = this.advance();
+    const props: any = {};
+    const children: any[] = [];
+    
+    if (this.peek() === '(') {
+      this.advance();
+      while (this.peek() !== ')') {
+        const key = this.advance();
+        this.expect('=');
+        props[key] = this.parseExpression();
+        if (this.peek() === ',') this.advance();
+      }
+      this.expect(')');
+    }
+    
+    if (this.peek() === '{') {
+      this.advance();
+      while (this.peek() !== '}') {
+        children.push(this.parseElement());
+      }
+      this.expect('}');
+    }
+    
+    return {
+      type: 'element_creation',
+      tag,
+      props,
+      children,
+    };
+  }
+
+  private parseExpression(): any {
+    return this.parseComparison();
+  }
+
+  private parseComparison(): any {
+    let left = this.parseAddition();
+    
+    while (['==', '!=', '<', '>'].includes(this.peek())) {
+      const operator = this.advance();
+      const right = this.parseAddition();
+      left = {
+        type: 'binary_operation',
+        operator,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  private parseAddition(): any {
+    let left = this.parseMultiplication();
+    
+    while (['+', '-'].includes(this.peek())) {
+      const operator = this.advance();
+      const right = this.parseMultiplication();
+      left = {
+        type: 'binary_operation',
+        operator,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  private parseMultiplication(): any {
+    let left = this.parsePrimary();
+    
+    while (['*', '/'].includes(this.peek())) {
+      const operator = this.advance();
+      const right = this.parsePrimary();
+      left = {
+        type: 'binary_operation',
+        operator,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  private parsePrimary(): any {
+    const token = this.peek();
+    
+    // Números
+    if (!isNaN(Number(token))) {
+      this.advance();
+      return { type: 'literal', value: { type: 'number', value: Number(token) } };
+    }
+    
+    // Strings
+    if (token.startsWith('"') || token.startsWith("'")) {
+      this.advance();
+      const value = token.slice(1, -1);
+      return { type: 'literal', value: { type: 'string', value } };
+    }
+    
+    // Booleanos
+    if (token === 'true' || token === 'false') {
+      this.advance();
+      return { type: 'literal', value: { type: 'boolean', value: token === 'true' } };
+    }
+    
+    // Llamadas a función o variables
+    const name = this.advance();
+    if (this.peek() === '(') {
+      this.advance();
+      const args: any[] = [];
+      while (this.peek() !== ')') {
+        args.push(this.parseExpression());
+        if (this.peek() === ',') this.advance();
+      }
+      this.expect(')');
+      return {
+        type: 'function_call',
+        name,
+        args,
+      };
+    }
+    
+    return {
+      type: 'variable_reference',
+      name,
+    };
+  }
+
+  private peek(): string {
+    return this.tokens[this.current] || '';
+  }
+
+  private advance(): string {
+    return this.tokens[this.current++] || '';
+  }
+
+  private expect(token: string): void {
+    if (this.peek() !== token) {
+      throw new Error(`Se esperaba '${token}', se encontró '${this.peek()}'`);
+    }
+    this.advance();
+  }
+
+  private isAtEnd(): boolean {
+    return this.current >= this.tokens.length;
+  }
 }
 
 export function interpretGWL(code: string): GWLParseResult {
@@ -23,408 +650,150 @@ export function interpretGWL(code: string): GWLParseResult {
   let js = '';
 
   try {
-    const lines = code.split('\n');
-    const components: Component[] = [];
-    const styles: Style[] = [];
-    let variables: Record<string, string> = {};
+    const parser = new GWLParser(code);
+    const ast = parser.parse();
+    const runtime = new GWLRuntime();
+    const elements = runtime.execute(ast);
     
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      const trimmed = line.trim();
-
-      // Skip comments and empty lines
-      if (trimmed.startsWith('//') || trimmed.length === 0) {
-        i++;
-        continue;
-      }
-
-      // Parse variable declarations
-      if (trimmed.startsWith('set ')) {
-        const varMatch = trimmed.match(/set\s+(\w+)\s*=\s*"(.+?)"/);
-        if (varMatch) {
-          variables[varMatch[1]] = varMatch[2];
-        }
-        i++;
-        continue;
-      }
-
-      // Parse component definitions
-      if (trimmed.startsWith('component ')) {
-        const result = parseComponent(lines, i);
-        if (result.component) {
-          components.push(result.component);
-        }
-        i = result.nextIndex;
-        continue;
-      }
-
-      // Parse style definitions
-      if (trimmed.startsWith('style ')) {
-        const result = parseStyle(lines, i);
-        if (result.style) {
-          styles.push(result.style);
-        }
-        i = result.nextIndex;
-        continue;
-      }
-
-      // Parse render blocks (standalone)
-      if (trimmed === 'render:') {
-        i++;
-        while (i < lines.length && (lines[i].startsWith('  ') || lines[i].trim() === '')) {
-          if (lines[i].trim()) {
-            html += convertGWLToHTML(lines[i].trim(), variables) + '\n';
-          }
-          i++;
-        }
-        continue;
-      }
-
-      i++;
-    }
-
-    // Generate CSS from styles
-    if (styles.length > 0) {
-      css = styles.map(s => `.${s.name} {\n${s.rules}\n}`).join('\n\n');
-    }
-
-    // Render components
-    for (const component of components) {
-      let componentHTML = '';
-      for (const line of component.body) {
-        componentHTML += convertGWLToHTML(line, variables) + '\n';
-      }
-      html += `<div class="gwl-component" data-component="${component.name}">\n${componentHTML}</div>\n`;
-    }
-
-    // Add default message if no output
-    if (!html || html.trim() === '') {
+    // Convertir elementos a HTML
+    html = elementsToHTML(elements);
+    
+    if (!html) {
       html = '<div class="gwl-preview"><h2>Vista Previa GWL+</h2><p>Escribe tu código para comenzar...</p></div>';
     }
-
-    // Wrap in container
-    html = `<div class="gwl-app">\n${html}\n</div>`;
-
+    
   } catch (error) {
-    errors.push(`Error de interpretación: ${error instanceof Error ? error.message : 'Error desconocido'}`);
-    html = '<div class="gwl-error"><h3>Error en el código</h3><p>Revisa tu sintaxis GWL+</p></div>';
+    errors.push(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+    html = `<div class="gwl-error"><h3>Error en el código</h3><p>${error instanceof Error ? error.message : 'Error desconocido'}</p></div>`;
   }
 
   return { html, css, js, errors };
 }
 
-function parseComponent(lines: string[], startIndex: number): { component: Component | null; nextIndex: number } {
-  const trimmed = lines[startIndex].trim();
-  const match = trimmed.match(/component\s+(\w+)\s*\((.*?)\):/);
-  
-  if (!match) {
-    return { component: null, nextIndex: startIndex + 1 };
+function elementsToHTML(elements: any[]): string {
+  let html = '';
+  for (const element of elements) {
+    if (element.type === 'element') {
+      html += renderElement(element.value);
+    }
   }
-
-  const name = match[1];
-  const props = match[2].split(',').map(p => p.trim()).filter(p => p);
-  const body: string[] = [];
-  
-  let i = startIndex + 1;
-  let inRender = false;
-  
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    
-    if (line === 'end') {
-      break;
-    }
-    
-    if (line === 'render:') {
-      inRender = true;
-      i++;
-      continue;
-    }
-    
-    if (inRender && line && !line.startsWith('//')) {
-      body.push(line);
-    }
-    
-    i++;
-  }
-  
-  return {
-    component: { name, props, body },
-    nextIndex: i + 1
-  };
+  return html;
 }
 
-function parseStyle(lines: string[], startIndex: number): { style: Style | null; nextIndex: number } {
-  const trimmed = lines[startIndex].trim();
-  const match = trimmed.match(/style\s+(\w+):\s*{/);
+function renderElement(element: any): string {
+  const { tag, props, children } = element;
+  let html = `<${tag}`;
   
-  if (!match) {
-    return { style: null, nextIndex: startIndex + 1 };
-  }
-
-  const name = match[1];
-  let rules = '';
-  let i = startIndex + 1;
-  
-  while (i < lines.length) {
-    const line = lines[i].trim();
-    
-    if (line === '}') {
-      break;
-    }
-    
-    if (line && !line.startsWith('//')) {
-      rules += `  ${line}\n`;
-    }
-    
-    i++;
+  for (const [key, value] of Object.entries(props)) {
+    html += ` ${key}="${value}"`;
   }
   
-  return {
-    style: { name, rules },
-    nextIndex: i + 1
-  };
+  html += '>';
+  
+  for (const child of children) {
+    if (child?.type === 'element') {
+      html += renderElement(child.value);
+    } else if (child?.type === 'string') {
+      html += child.value;
+    }
+  }
+  
+  html += `</${tag}>`;
+  return html;
 }
 
-function convertGWLToHTML(gwlLine: string, variables: Record<string, string> = {}): string {
-  gwlLine = gwlLine.trim();
+export const exampleGWLCode = `// Lenguaje de Programación GWL+
+// Variables y tipos
+let nombre = "Usuario"
+let contador = 0
+let activo = true
 
-  // Replace variables
-  for (const [key, value] of Object.entries(variables)) {
-    gwlLine = gwlLine.replace(new RegExp(`\\$${key}\\b`, 'g'), value);
+// Función para calcular factorial
+func factorial(n) {
+  if (n == 0) {
+    return 1
+  } else {
+    return n * factorial(n - 1)
   }
-
-  // Text element
-  if (gwlLine.startsWith('Text(')) {
-    const match = gwlLine.match(/Text\("(.+?)"\)/);
-    if (match) return `<p class="gwl-text">${match[1]}</p>`;
-  }
-
-  // Heading element
-  if (gwlLine.startsWith('Heading(')) {
-    const match = gwlLine.match(/Heading\("(.+?)"\)/);
-    if (match) return `<h1 class="gwl-heading">${match[1]}</h1>`;
-  }
-
-  // Subheading element
-  if (gwlLine.startsWith('Subheading(')) {
-    const match = gwlLine.match(/Subheading\("(.+?)"\)/);
-    if (match) return `<h2 class="gwl-subheading">${match[1]}</h2>`;
-  }
-
-  // Button element with optional onclick
-  if (gwlLine.startsWith('Button(')) {
-    const match = gwlLine.match(/Button\("(.+?)"(?:,\s*onClick="(.+?)")?\)/);
-    if (match) {
-      const text = match[1];
-      const onClick = match[2] ? ` onclick="alert('${match[2]}')"` : '';
-      return `<button class="gwl-button"${onClick}>${text}</button>`;
-    }
-  }
-
-  // Input element
-  if (gwlLine.startsWith('Input(')) {
-    const match = gwlLine.match(/Input\("(.+?)"(?:,\s*type="(.+?)")?\)/);
-    if (match) {
-      const placeholder = match[1];
-      const type = match[2] || 'text';
-      return `<input type="${type}" placeholder="${placeholder}" class="gwl-input" />`;
-    }
-  }
-
-  // Image element
-  if (gwlLine.startsWith('Image(')) {
-    const match = gwlLine.match(/Image\("(.+?)"(?:,\s*alt="(.+?)")?\)/);
-    if (match) {
-      const src = match[1];
-      const alt = match[2] || 'Image';
-      return `<img src="${src}" alt="${alt}" class="gwl-image" />`;
-    }
-  }
-
-  // Link element
-  if (gwlLine.startsWith('Link(')) {
-    const match = gwlLine.match(/Link\("(.+?)",\s*"(.+?)"\)/);
-    if (match) {
-      return `<a href="${match[2]}" class="gwl-link">${match[1]}</a>`;
-    }
-  }
-
-  // Container with class
-  if (gwlLine.startsWith('Container(')) {
-    const match = gwlLine.match(/Container\((?:class="(.+?)")?\):/);
-    if (match) {
-      const className = match[1] || '';
-      return `<div class="gwl-container ${className}">`;
-    }
-  }
-
-  // Row for horizontal layout
-  if (gwlLine.startsWith('Row(')) {
-    const match = gwlLine.match(/Row\((?:class="(.+?)")?\):/);
-    if (match) {
-      const className = match[1] || '';
-      return `<div class="gwl-row ${className}">`;
-    }
-  }
-
-  // Column for vertical layout
-  if (gwlLine.startsWith('Column(')) {
-    const match = gwlLine.match(/Column\((?:class="(.+?)")?\):/);
-    if (match) {
-      const className = match[1] || '';
-      return `<div class="gwl-column ${className}">`;
-    }
-  }
-
-  // Card element
-  if (gwlLine.startsWith('Card(')) {
-    const match = gwlLine.match(/Card\((?:class="(.+?)")?\):/);
-    if (match) {
-      const className = match[1] || '';
-      return `<div class="gwl-card ${className}">`;
-    }
-  }
-
-  // List element
-  if (gwlLine.startsWith('List(')) {
-    return `<ul class="gwl-list">`;
-  }
-
-  // ListItem element
-  if (gwlLine.startsWith('ListItem(')) {
-    const match = gwlLine.match(/ListItem\("(.+?)"\)/);
-    if (match) return `<li class="gwl-list-item">${match[1]}</li>`;
-  }
-
-  // Closing tags
-  if (gwlLine === 'end') {
-    return '</div>';
-  }
-
-  if (gwlLine === '}') {
-    return '</div>';
-  }
-
-  return '';
 }
 
-export const exampleGWLCode = `// Ejemplo completo de GWL+
-// Variables
-set title = "¡Bienvenido a GWL+!"
-set description = "Crea aplicaciones web con sintaxis simple"
+// Arrays y loops
+let numeros = [1, 2, 3, 4, 5]
+let suma = 0
 
-// Definir estilos personalizados
-style hero: {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 40px;
-  border-radius: 12px;
-  color: white;
-  text-align: center;
+for (num in numeros) {
+  suma = suma + num
 }
 
-style feature-card: {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  margin: 10px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+// Condicionales
+if (suma > 10) {
+  print("Suma es mayor que 10")
 }
 
-// Componente principal
-component App():
-  render:
-    Container(class="hero"):
-      Heading($title)
-      Text($description)
-      Button("Comenzar Ahora", onClick="¡Has hecho clic!")
-    end
-    
-    Row():
-      Card(class="feature-card"):
-        Subheading("Fácil de Aprender")
-        Text("Sintaxis intuitiva tipo Python")
-      end
-      
-      Card(class="feature-card"):
-        Subheading("Potente")
-        Text("Crea apps completas")
-      end
-    end
-    
-    Container():
-      Subheading("Características")
-      List():
-        ListItem("Componentes reutilizables")
-        ListItem("Estilos personalizados")
-        ListItem("Variables dinámicas")
-      end
-    end
-end
+// Renderizado de UI
+render {
+  div(class="container") {
+    h1 { "Calculadora GWL+" }
+    p { "Factorial de 5: " + factorial(5) }
+    p { "Suma del array: " + suma }
+  }
+}
 `;
 
 export const tutorialExamples = {
-  basic: `// Tutorial 1: Lo Básico
-component HelloWorld():
-  render:
-    Heading("¡Hola Mundo!")
-    Text("Mi primera app en GWL+")
-    Button("Click aquí")
-end`,
+  basic: `// Tutorial 1: Variables y Tipos
+let mensaje = "Hola GWL+"
+let numero = 42
+let activo = true
 
-  withStyles: `// Tutorial 2: Estilos
-style card: {
-  background: #e3f2fd;
-  padding: 20px;
-  border-radius: 8px;
+print(mensaje)
+print(numero)`,
+
+  functions: `// Tutorial 2: Funciones
+func saludar(nombre) {
+  return "Hola, " + nombre + "!"
 }
 
-component StyledCard():
-  render:
-    Container(class="card"):
-      Heading("Tarjeta con Estilo")
-      Text("Los estilos hacen todo mejor")
-    end
-end`,
-
-  withVariables: `// Tutorial 3: Variables
-set nombre = "Desarrollador"
-set mensaje = "¡Estás haciendo un gran trabajo!"
-
-component PersonalGreeting():
-  render:
-    Heading("Hola, $nombre")
-    Text($mensaje)
-end`,
-
-  complete: `// Tutorial 4: App Completa
-set appName = "Mi App"
-
-style header: {
-  background: #6366f1;
-  color: white;
-  padding: 20px;
-  text-align: center;
+func suma(a, b) {
+  return a + b
 }
 
-style content: {
-  padding: 20px;
-  max-width: 600px;
-  margin: 0 auto;
+let resultado = suma(10, 20)
+print(saludar("Mundo"))
+print(resultado)`,
+
+  control: `// Tutorial 3: Control de Flujo
+let edad = 18
+
+if (edad >= 18) {
+  print("Eres mayor de edad")
+} else {
+  print("Eres menor de edad")
 }
 
-component FullApp():
-  render:
-    Container(class="header"):
-      Heading($appName)
-    end
-    
-    Container(class="content"):
-      Subheading("Bienvenido")
-      Text("Esta es una aplicación completa")
-      Input("Escribe algo...")
-      Button("Enviar", onClick="Formulario enviado")
-    end
-end`,
+let i = 0
+while (i < 5) {
+  print(i)
+  i = i + 1
+}`,
+
+  complete: `// Tutorial 4: Programa Completo
+let items = ["Manzana", "Banana", "Naranja"]
+let total = 0
+
+func procesar(lista) {
+  for (item in lista) {
+    total = total + 1
+  }
+  return total
+}
+
+let cantidad = procesar(items)
+
+render {
+  div(class="app") {
+    h1 { "Mi Aplicación GWL+" }
+    p { "Total de items: " + cantidad }
+  }
+}`,
 };
