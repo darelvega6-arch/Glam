@@ -1,28 +1,47 @@
-import { Switch, Route } from "wouter";
-import { queryClient } from "./lib/queryClient";
+import { useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import NotFound from "@/pages/not-found";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import LandingPage from "@/pages/LandingPage";
+import EditorPage from "@/pages/EditorPage";
+import TutorialsPage from "@/pages/TutorialsPage";
+import ProjectsPage from "@/pages/ProjectsPage";
 
-function Router() {
-  return (
-    <Switch>
-      {/* Add pages below */}
-      {/* <Route path="/" component={Home}/> */}
-      {/* Fallback to 404 */}
-      <Route component={NotFound} />
-    </Switch>
-  );
-}
+type Page = "landing" | "editor" | "tutorials" | "projects";
 
 function App() {
+  const [currentPage, setCurrentPage] = useState<Page>("landing");
+
+  const renderPage = () => {
+    switch (currentPage) {
+      case "landing":
+        return <LandingPage onGetStarted={() => setCurrentPage("editor")} />;
+      case "editor":
+        return <EditorPage onBack={() => setCurrentPage("landing")} />;
+      case "tutorials":
+        return <TutorialsPage onBack={() => setCurrentPage("landing")} />;
+      case "projects":
+        return (
+          <ProjectsPage
+            onBack={() => setCurrentPage("landing")}
+            onEditProject={() => setCurrentPage("editor")}
+          />
+        );
+      default:
+        return <LandingPage onGetStarted={() => setCurrentPage("editor")} />;
+    }
+  };
+
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-      </TooltipProvider>
+      <ThemeProvider>
+        <TooltipProvider>
+          {renderPage()}
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
