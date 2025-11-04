@@ -6,6 +6,12 @@ export interface GWLParseResult {
   errors: string[];
 }
 
+interface Token {
+  type: 'KEYWORD' | 'IDENTIFIER' | 'NUMBER' | 'STRING' | 'OPERATOR' | 'PUNCTUATION' | 'NEWLINE' | 'EOF';
+  value: string;
+  line: number;
+}
+
 interface GWLValue {
   type: 'string' | 'number' | 'boolean' | 'function' | 'object' | 'array' | 'null';
   value: any;
@@ -19,15 +25,545 @@ interface GWLScope {
 
 interface GWLFunction {
   params: string[];
-  body: string[];
+  body: any[];
   scope: GWLScope;
+  native?: (args: GWLValue[]) => any;
+}
+
+class Lexer {
+  private code: string;
+  private pos: number = 0;
+  private line: number = 1;
+  private tokens: Token[] = [];
+
+  private keywords = new Set([
+    'definir', 'fin', 'si', 'sino', 'para', 'en', 'mientras',
+    'retornar', 'verdadero', 'falso', 'nulo', 'y', 'o'
+  ]);
+
+  constructor(code: string) {
+    this.code = code;
+  }
+
+  tokenize(): Token[] {
+    this.tokens = [];
+    while (this.pos < this.code.length) {
+      this.skipWhitespace();
+      if (this.pos >= this.code.length) break;
+
+      const char = this.code[this.pos];
+
+      // Comentarios
+      if (char === '#') {
+        this.skipComment();
+        continue;
+      }
+
+      // Newline
+      if (char === '\n') {
+        this.tokens.push({ type: 'NEWLINE', value: '\n', line: this.line });
+        this.line++;
+        this.pos++;
+        continue;
+      }
+
+      // Strings
+      if (char === '"' || char === "'") {
+        this.tokens.push(this.readString(char));
+        continue;
+      }
+
+      // Numbers
+      if (this.isDigit(char)) {
+        this.tokens.push(this.readNumber());
+        continue;
+      }
+
+      // Operators
+      if (this.isOperatorStart(char)) {
+        this.tokens.push(this.readOperator());
+        continue;
+      }
+
+      // Punctuation
+      if ('()[]{},:'.includes(char)) {
+        this.tokens.push({ type: 'PUNCTUATION', value: char, line: this.line });
+        this.pos++;
+        continue;
+      }
+
+      // Identifiers and Keywords
+      if (this.isAlpha(char)) {
+        this.tokens.push(this.readIdentifier());
+        continue;
+      }
+
+      this.pos++;
+    }
+
+    this.tokens.push({ type: 'EOF', value: '', line: this.line });
+    return this.tokens;
+  }
+
+  private skipWhitespace(): void {
+    while (this.pos < this.code.length && ' \t\r'.includes(this.code[this.pos])) {
+      this.pos++;
+    }
+  }
+
+  private skipComment(): void {
+    while (this.pos < this.code.length && this.code[this.pos] !== '\n') {
+      this.pos++;
+    }
+  }
+
+  private readString(quote: string): Token {
+    const start = this.pos;
+    this.pos++; // skip opening quote
+    let value = '';
+
+    while (this.pos < this.code.length && this.code[this.pos] !== quote) {
+      if (this.code[this.pos] === '\\') {
+        this.pos++;
+        if (this.pos < this.code.length) {
+          const escapeChar = this.code[this.pos];
+          if (escapeChar === 'n') value += '\n';
+          else if (escapeChar === 't') value += '\t';
+          else value += escapeChar;
+        }
+      } else {
+        value += this.code[this.pos];
+      }
+      this.pos++;
+    }
+
+    if (this.pos < this.code.length) this.pos++; // skip closing quote
+
+    return { type: 'STRING', value, line: this.line };
+  }
+
+  private readNumber(): Token {
+    let value = '';
+    while (this.pos < this.code.length && (this.isDigit(this.code[this.pos]) || this.code[this.pos] === '.')) {
+      value += this.code[this.pos];
+      this.pos++;
+    }
+    return { type: 'NUMBER', value, line: this.line };
+  }
+
+  private readOperator(): Token {
+    const twoCharOps = ['==', '!=', '<=', '>='];
+    const twoChar = this.code.slice(this.pos, this.pos + 2);
+
+    if (twoCharOps.includes(twoChar)) {
+      this.pos += 2;
+      return { type: 'OPERATOR', value: twoChar, line: this.line };
+    }
+
+    const char = this.code[this.pos];
+    this.pos++;
+    return { type: 'OPERATOR', value: char, line: this.line };
+  }
+
+  private readIdentifier(): Token {
+    let value = '';
+    while (this.pos < this.code.length && (this.isAlpha(this.code[this.pos]) || this.isDigit(this.code[this.pos]) || this.code[this.pos] === '_')) {
+      value += this.code[this.pos];
+      this.pos++;
+    }
+
+    const type = this.keywords.has(value) ? 'KEYWORD' : 'IDENTIFIER';
+    return { type, value, line: this.line };
+  }
+
+  private isDigit(char: string): boolean {
+    return char >= '0' && char <= '9';
+  }
+
+  private isAlpha(char: string): boolean {
+    return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char === '_';
+  }
+
+  private isOperatorStart(char: string): boolean {
+    return '+-*/<>=!'.includes(char);
+  }
+}
+
+class Parser {
+  private tokens: Token[];
+  private pos: number = 0;
+
+  constructor(tokens: Token[]) {
+    this.tokens = tokens.filter(t => t.type !== 'NEWLINE' || this.isSignificantNewline(t));
+  }
+
+  private isSignificantNewline(token: Token): boolean {
+    return true; // Simplificado por ahora
+  }
+
+  parse(): any[] {
+    const statements: any[] = [];
+    while (!this.isAtEnd()) {
+      this.skipNewlines();
+      if (this.isAtEnd()) break;
+      const stmt = this.parseStatement();
+      if (stmt) statements.push(stmt);
+    }
+    return statements;
+  }
+
+  private parseStatement(): any {
+    const token = this.peek();
+
+    if (token.type === 'KEYWORD') {
+      switch (token.value) {
+        case 'definir': return this.parseFunctionDef();
+        case 'si': return this.parseIf();
+        case 'para': return this.parseFor();
+        case 'mientras': return this.parseWhile();
+        case 'retornar': return this.parseReturn();
+      }
+    }
+
+    // Assignment or expression
+    if (this.peek().type === 'IDENTIFIER' && this.peekAhead(1)?.value === '=') {
+      return this.parseAssignment();
+    }
+
+    return this.parseExpressionStatement();
+  }
+
+  private parseAssignment(): any {
+    const name = this.advance().value;
+    this.expect('OPERATOR', '=');
+    const value = this.parseExpression();
+    this.skipNewlines();
+    return { type: 'variable_assignment', name, value };
+  }
+
+  private parseFunctionDef(): any {
+    this.advance(); // 'definir'
+    const name = this.expect('IDENTIFIER').value;
+    this.expect('PUNCTUATION', '(');
+
+    const params: string[] = [];
+    while (this.peek().value !== ')') {
+      params.push(this.expect('IDENTIFIER').value);
+      if (this.peek().value === ',') this.advance();
+    }
+
+    this.expect('PUNCTUATION', ')');
+    this.expect('PUNCTUATION', ':');
+    this.skipNewlines();
+
+    const body: any[] = [];
+    while (!this.isAtEnd() && this.peek().value !== 'fin') {
+      this.skipNewlines();
+      if (this.peek().value === 'fin') break;
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+
+    if (this.peek().value === 'fin') this.advance();
+    this.skipNewlines();
+
+    return { type: 'function_definition', name, params, body };
+  }
+
+  private parseIf(): any {
+    this.advance(); // 'si'
+    const condition = this.parseExpression();
+    this.expect('PUNCTUATION', ':');
+    this.skipNewlines();
+
+    const thenBranch: any[] = [];
+    while (!this.isAtEnd() && this.peek().value !== 'sino' && this.peek().value !== 'fin') {
+      this.skipNewlines();
+      if (this.peek().value === 'sino' || this.peek().value === 'fin') break;
+      const stmt = this.parseStatement();
+      if (stmt) thenBranch.push(stmt);
+    }
+
+    let elseBranch = null;
+    if (this.peek().value === 'sino') {
+      this.advance();
+      this.expect('PUNCTUATION', ':');
+      this.skipNewlines();
+
+      elseBranch = [];
+      while (!this.isAtEnd() && this.peek().value !== 'fin') {
+        this.skipNewlines();
+        if (this.peek().value === 'fin') break;
+        const stmt = this.parseStatement();
+        if (stmt) elseBranch.push(stmt);
+      }
+    }
+
+    if (this.peek().value === 'fin') this.advance();
+    this.skipNewlines();
+
+    return {
+      type: 'if_statement',
+      condition,
+      thenBranch: { type: 'block', statements: thenBranch },
+      elseBranch: elseBranch ? { type: 'block', statements: elseBranch } : null,
+    };
+  }
+
+  private parseFor(): any {
+    this.advance(); // 'para'
+    const variable = this.expect('IDENTIFIER').value;
+    this.expect('KEYWORD', 'en');
+    const collection = this.parseExpression();
+    this.expect('PUNCTUATION', ':');
+    this.skipNewlines();
+
+    const body: any[] = [];
+    while (!this.isAtEnd() && this.peek().value !== 'fin') {
+      this.skipNewlines();
+      if (this.peek().value === 'fin') break;
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+
+    if (this.peek().value === 'fin') this.advance();
+    this.skipNewlines();
+
+    return { type: 'for_loop', variable, collection, body: { type: 'block', statements: body } };
+  }
+
+  private parseWhile(): any {
+    this.advance(); // 'mientras'
+    const condition = this.parseExpression();
+    this.expect('PUNCTUATION', ':');
+    this.skipNewlines();
+
+    const body: any[] = [];
+    while (!this.isAtEnd() && this.peek().value !== 'fin') {
+      this.skipNewlines();
+      if (this.peek().value === 'fin') break;
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+
+    if (this.peek().value === 'fin') this.advance();
+    this.skipNewlines();
+
+    return { type: 'while_loop', condition, body: { type: 'block', statements: body } };
+  }
+
+  private parseReturn(): any {
+    this.advance(); // 'retornar'
+    const value = this.parseExpression();
+    this.skipNewlines();
+    return { type: 'return_statement', value };
+  }
+
+  private parseExpressionStatement(): any {
+    const expr = this.parseExpression();
+    this.skipNewlines();
+    return expr;
+  }
+
+  private parseExpression(): any {
+    return this.parseLogicalOr();
+  }
+
+  private parseLogicalOr(): any {
+    let left = this.parseLogicalAnd();
+
+    while (this.peek().value === 'o' || this.peek().value === 'or') {
+      const op = this.advance().value;
+      const right = this.parseLogicalAnd();
+      left = { type: 'binary_operation', operator: op, left, right };
+    }
+
+    return left;
+  }
+
+  private parseLogicalAnd(): any {
+    let left = this.parseEquality();
+
+    while (this.peek().value === 'y' || this.peek().value === 'and') {
+      const op = this.advance().value;
+      const right = this.parseEquality();
+      left = { type: 'binary_operation', operator: op, left, right };
+    }
+
+    return left;
+  }
+
+  private parseEquality(): any {
+    let left = this.parseComparison();
+
+    while (['==', '!='].includes(this.peek().value)) {
+      const op = this.advance().value;
+      const right = this.parseComparison();
+      left = { type: 'binary_operation', operator: op, left, right };
+    }
+
+    return left;
+  }
+
+  private parseComparison(): any {
+    let left = this.parseAddition();
+
+    while (['<', '>', '<=', '>='].includes(this.peek().value)) {
+      const op = this.advance().value;
+      const right = this.parseAddition();
+      left = { type: 'binary_operation', operator: op, left, right };
+    }
+
+    return left;
+  }
+
+  private parseAddition(): any {
+    let left = this.parseMultiplication();
+
+    while (['+', '-'].includes(this.peek().value)) {
+      const op = this.advance().value;
+      const right = this.parseMultiplication();
+      left = { type: 'binary_operation', operator: op, left, right };
+    }
+
+    return left;
+  }
+
+  private parseMultiplication(): any {
+    let left = this.parsePrimary();
+
+    while (['*', '/'].includes(this.peek().value)) {
+      const op = this.advance().value;
+      const right = this.parsePrimary();
+      left = { type: 'binary_operation', operator: op, left, right };
+    }
+
+    return left;
+  }
+
+  private parsePrimary(): any {
+    const token = this.peek();
+
+    // Numbers
+    if (token.type === 'NUMBER') {
+      this.advance();
+      return { type: 'literal', value: { type: 'number', value: parseFloat(token.value) } };
+    }
+
+    // Strings
+    if (token.type === 'STRING') {
+      this.advance();
+      return { type: 'literal', value: { type: 'string', value: token.value } };
+    }
+
+    // Booleans
+    if (token.value === 'verdadero' || token.value === 'falso') {
+      this.advance();
+      return { type: 'literal', value: { type: 'boolean', value: token.value === 'verdadero' } };
+    }
+
+    // Null
+    if (token.value === 'nulo') {
+      this.advance();
+      return { type: 'literal', value: { type: 'null', value: null } };
+    }
+
+    // Arrays
+    if (token.value === '[') {
+      return this.parseArray();
+    }
+
+    // Parentheses
+    if (token.value === '(') {
+      this.advance();
+      const expr = this.parseExpression();
+      this.expect('PUNCTUATION', ')');
+      return expr;
+    }
+
+    // Function calls or variables
+    if (token.type === 'IDENTIFIER') {
+      const name = this.advance().value;
+
+      if (this.peek().value === '(') {
+        return this.parseFunctionCall(name);
+      }
+
+      return { type: 'variable_reference', name };
+    }
+
+    throw new Error(`Token inesperado: ${token.value} en línea ${token.line}`);
+  }
+
+  private parseArray(): any {
+    this.expect('PUNCTUATION', '[');
+    const items: any[] = [];
+
+    while (this.peek().value !== ']') {
+      items.push(this.parseExpression());
+      if (this.peek().value === ',') this.advance();
+    }
+
+    this.expect('PUNCTUATION', ']');
+
+    const values = items.map(item => {
+      if (item.type === 'literal') return item.value;
+      return item;
+    });
+
+    return { type: 'literal', value: { type: 'array', value: values } };
+  }
+
+  private parseFunctionCall(name: string): any {
+    this.expect('PUNCTUATION', '(');
+    const args: any[] = [];
+
+    while (this.peek().value !== ')') {
+      args.push(this.parseExpression());
+      if (this.peek().value === ',') this.advance();
+    }
+
+    this.expect('PUNCTUATION', ')');
+
+    return { type: 'function_call', name, args };
+  }
+
+  private peek(): Token {
+    return this.tokens[this.pos] || { type: 'EOF', value: '', line: 0 };
+  }
+
+  private peekAhead(offset: number): Token | null {
+    return this.tokens[this.pos + offset] || null;
+  }
+
+  private advance(): Token {
+    return this.tokens[this.pos++] || { type: 'EOF', value: '', line: 0 };
+  }
+
+  private expect(type: string, value?: string): Token {
+    const token = this.peek();
+    if (token.type !== type || (value !== undefined && token.value !== value)) {
+      throw new Error(`Se esperaba ${type}${value ? ` '${value}'` : ''}, se encontró ${token.value} en línea ${token.line}`);
+    }
+    return this.advance();
+  }
+
+  private skipNewlines(): void {
+    while (this.peek().type === 'NEWLINE') {
+      this.advance();
+    }
+  }
+
+  private isAtEnd(): boolean {
+    return this.peek().type === 'EOF';
+  }
 }
 
 class GWLRuntime {
   private globalScope: GWLScope;
   private currentScope: GWLScope;
   private uiCommands: any[] = [];
-  
+
   constructor() {
     this.globalScope = {
       variables: new Map(),
@@ -38,40 +574,39 @@ class GWLRuntime {
   }
 
   private initBuiltins() {
-    // Funciones nativas de UI
-    this.registerNativeFunction('crear_contenedor', ['id'], (args) => {
-      return { type: 'ui_container', id: args[0].value, children: [] };
-    });
-    
-    this.registerNativeFunction('agregar_titulo', ['texto', 'nivel'], (args) => {
-      const nivel = args[1] ? args[1].value : 1;
-      return { type: 'ui_heading', text: args[0].value, level: nivel };
-    });
-    
-    this.registerNativeFunction('agregar_texto', ['contenido'], (args) => {
-      return { type: 'ui_text', content: args[0].value };
-    });
-    
-    this.registerNativeFunction('agregar_boton', ['etiqueta'], (args) => {
-      return { type: 'ui_button', label: args[0].value };
-    });
-    
-    this.registerNativeFunction('agregar_entrada', ['placeholder'], (args) => {
-      return { type: 'ui_input', placeholder: args[0].value };
-    });
-    
-    this.registerNativeFunction('mostrar', ['vista'], (args) => {
+    this.registerNativeFunction('mostrar', ['elemento'], (args) => {
       this.uiCommands.push(args[0]);
       return { type: 'null', value: null };
     });
-    
+
     this.registerNativeFunction('imprimir', ['valor'], (args) => {
       console.log(args[0].value);
       return { type: 'null', value: null };
     });
-    
+
     this.registerNativeFunction('str', ['valor'], (args) => {
       return { type: 'string', value: String(args[0].value) };
+    });
+
+    this.registerNativeFunction('crear_ventana', ['titulo'], (args) => {
+      return { type: 'ui_window', title: args[0].value, children: [] };
+    });
+
+    this.registerNativeFunction('titulo', ['texto', 'tamano'], (args) => {
+      const size = args[1] ? args[1].value : 1;
+      return { type: 'ui_heading', text: args[0].value, size };
+    });
+
+    this.registerNativeFunction('texto', ['contenido'], (args) => {
+      return { type: 'ui_text', content: args[0].value };
+    });
+
+    this.registerNativeFunction('boton', ['etiqueta'], (args) => {
+      return { type: 'ui_button', label: args[0].value };
+    });
+
+    this.registerNativeFunction('entrada', ['placeholder'], (args) => {
+      return { type: 'ui_input', placeholder: args[0].value || '' };
     });
   }
 
@@ -81,7 +616,7 @@ class GWLRuntime {
       body: [],
       scope: this.globalScope,
       native: handler,
-    } as any);
+    });
   }
 
   execute(ast: any[]): any {
@@ -94,7 +629,7 @@ class GWLRuntime {
 
   private executeNode(node: any): GWLValue | null {
     if (!node) return null;
-    
+
     switch (node.type) {
       case 'variable_assignment':
         return this.executeVarAssignment(node);
@@ -108,6 +643,8 @@ class GWLRuntime {
         return this.executeForLoop(node);
       case 'while_loop':
         return this.executeWhileLoop(node);
+      case 'return_statement':
+        return this.executeNode(node.value);
       case 'binary_operation':
         return this.executeBinaryOp(node);
       case 'literal':
@@ -147,28 +684,24 @@ class GWLRuntime {
   private executeFunctionCall(node: any): GWLValue | null {
     const func = this.findFunction(node.name);
     if (!func) {
-      throw new Error(`Función '${node.name}' no definida`);
+      throw new Error(`Función '${node.name}' no existe`);
     }
 
-    // Evaluar argumentos
     const args: GWLValue[] = [];
     for (const arg of node.args) {
       args.push(this.executeNode(arg)!);
     }
 
-    // Si es función nativa
-    if ((func as any).native) {
-      return (func as any).native(args);
+    if (func.native) {
+      return func.native(args);
     }
 
-    // Crear nuevo scope para la función
     const funcScope: GWLScope = {
       variables: new Map(),
       functions: new Map(),
       parent: func.scope,
     };
 
-    // Asignar parámetros
     for (let i = 0; i < func.params.length; i++) {
       funcScope.variables.set(func.params[i], args[i] || { type: 'null', value: null });
     }
@@ -179,9 +712,7 @@ class GWLRuntime {
     let result: GWLValue | null = null;
     for (const stmt of func.body) {
       result = this.executeNode(stmt);
-      if (stmt.type === 'return_statement') {
-        break;
-      }
+      if (stmt.type === 'return_statement') break;
     }
 
     this.currentScope = prevScope;
@@ -201,7 +732,7 @@ class GWLRuntime {
   private executeForLoop(node: any): GWLValue | null {
     const collection = this.executeNode(node.collection);
     if (collection?.type !== 'array') {
-      throw new Error('para loop requiere un array');
+      throw new Error('El bucle "para" requiere un array');
     }
 
     for (const item of collection.value) {
@@ -212,7 +743,13 @@ class GWLRuntime {
   }
 
   private executeWhileLoop(node: any): GWLValue | null {
+    let iterations = 0;
+    const maxIterations = 10000;
+
     while (this.isTruthy(this.executeNode(node.condition))) {
+      if (iterations++ > maxIterations) {
+        throw new Error('Bucle infinito detectado');
+      }
       this.executeBlock(node.body);
     }
     return null;
@@ -222,23 +759,35 @@ class GWLRuntime {
     const left = this.executeNode(node.left);
     const right = this.executeNode(node.right);
 
+    if (!left || !right) {
+      throw new Error('Operación con valores nulos');
+    }
+
     switch (node.operator) {
       case '+':
-        return this.add(left!, right!);
+        if (left.type === 'number' && right.type === 'number') {
+          return { type: 'number', value: left.value + right.value };
+        }
+        return { type: 'string', value: String(left.value) + String(right.value) };
       case '-':
-        return this.subtract(left!, right!);
+        return { type: 'number', value: Number(left.value) - Number(right.value) };
       case '*':
-        return this.multiply(left!, right!);
+        return { type: 'number', value: Number(left.value) * Number(right.value) };
       case '/':
-        return this.divide(left!, right!);
+        if (Number(right.value) === 0) throw new Error('División por cero');
+        return { type: 'number', value: Number(left.value) / Number(right.value) };
       case '==':
-        return { type: 'boolean', value: this.equals(left!, right!) };
+        return { type: 'boolean', value: left.value === right.value };
       case '!=':
-        return { type: 'boolean', value: !this.equals(left!, right!) };
+        return { type: 'boolean', value: left.value !== right.value };
       case '<':
-        return { type: 'boolean', value: this.lessThan(left!, right!) };
+        return { type: 'boolean', value: Number(left.value) < Number(right.value) };
       case '>':
-        return { type: 'boolean', value: this.greaterThan(left!, right!) };
+        return { type: 'boolean', value: Number(left.value) > Number(right.value) };
+      case '<=':
+        return { type: 'boolean', value: Number(left.value) <= Number(right.value) };
+      case '>=':
+        return { type: 'boolean', value: Number(left.value) >= Number(right.value) };
       case 'y':
       case 'and':
         return { type: 'boolean', value: this.isTruthy(left) && this.isTruthy(right) };
@@ -248,56 +797,6 @@ class GWLRuntime {
       default:
         throw new Error(`Operador desconocido: ${node.operator}`);
     }
-  }
-
-  private add(left: GWLValue, right: GWLValue): GWLValue {
-    if (left.type === 'number' && right.type === 'number') {
-      return { type: 'number', value: left.value + right.value };
-    }
-    if (left.type === 'string' || right.type === 'string') {
-      return { type: 'string', value: String(left.value) + String(right.value) };
-    }
-    throw new Error('Operación + no válida');
-  }
-
-  private subtract(left: GWLValue, right: GWLValue): GWLValue {
-    if (left.type === 'number' && right.type === 'number') {
-      return { type: 'number', value: left.value - right.value };
-    }
-    throw new Error('Operación - requiere números');
-  }
-
-  private multiply(left: GWLValue, right: GWLValue): GWLValue {
-    if (left.type === 'number' && right.type === 'number') {
-      return { type: 'number', value: left.value * right.value };
-    }
-    throw new Error('Operación * requiere números');
-  }
-
-  private divide(left: GWLValue, right: GWLValue): GWLValue {
-    if (left.type === 'number' && right.type === 'number') {
-      if (right.value === 0) throw new Error('División por cero');
-      return { type: 'number', value: left.value / right.value };
-    }
-    throw new Error('Operación / requiere números');
-  }
-
-  private equals(left: GWLValue, right: GWLValue): boolean {
-    return left.type === right.type && left.value === right.value;
-  }
-
-  private lessThan(left: GWLValue, right: GWLValue): boolean {
-    if (left.type === 'number' && right.type === 'number') {
-      return left.value < right.value;
-    }
-    throw new Error('Comparación < requiere números');
-  }
-
-  private greaterThan(left: GWLValue, right: GWLValue): boolean {
-    if (left.type === 'number' && right.type === 'number') {
-      return left.value > right.value;
-    }
-    throw new Error('Comparación > requiere números');
   }
 
   private isTruthy(value: GWLValue | null): boolean {
@@ -332,293 +831,6 @@ class GWLRuntime {
   }
 }
 
-class GWLParser {
-  private lines: string[];
-  private current = 0;
-
-  constructor(code: string) {
-    this.lines = code.split('\n').map(line => line.trim()).filter(line => line && !line.startsWith('#'));
-  }
-
-  parse(): any[] {
-    const ast: any[] = [];
-    while (!this.isAtEnd()) {
-      const stmt = this.parseStatement();
-      if (stmt) ast.push(stmt);
-    }
-    return ast;
-  }
-
-  private parseStatement(): any {
-    const line = this.peek();
-    
-    if (line.startsWith('definir ')) {
-      return this.parseFunctionDefinition();
-    }
-    if (line.startsWith('si ')) {
-      return this.parseIfStatement();
-    }
-    if (line.startsWith('para ')) {
-      return this.parseForLoop();
-    }
-    if (line.startsWith('mientras ')) {
-      return this.parseWhileLoop();
-    }
-    if (line.includes('=') && !line.includes('==')) {
-      return this.parseVarAssignment();
-    }
-    
-    return this.parseExpression();
-  }
-
-  private parseVarAssignment(): any {
-    const line = this.advance();
-    const [name, ...valueParts] = line.split('=');
-    const valueStr = valueParts.join('=').trim();
-    
-    return {
-      type: 'variable_assignment',
-      name: name.trim(),
-      value: this.parseExpressionFromString(valueStr),
-    };
-  }
-
-  private parseFunctionDefinition(): any {
-    const line = this.advance();
-    const match = line.match(/definir\s+(\w+)\s*\((.*?)\):/);
-    
-    if (!match) {
-      throw new Error(`Sintaxis de función inválida: ${line}`);
-    }
-    
-    const name = match[1];
-    const paramsStr = match[2].trim();
-    const params = paramsStr ? paramsStr.split(',').map(p => p.trim()) : [];
-    
-    const body: any[] = [];
-    let indent = this.getIndent(this.peek());
-    
-    while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
-      body.push(this.parseStatement());
-    }
-    
-    if (this.peek() === 'fin') {
-      this.advance();
-    }
-    
-    return {
-      type: 'function_definition',
-      name,
-      params,
-      body,
-    };
-  }
-
-  private parseIfStatement(): any {
-    const line = this.advance();
-    const conditionStr = line.substring(3, line.length - 1).trim();
-    const condition = this.parseExpressionFromString(conditionStr);
-    
-    const thenStatements: any[] = [];
-    let indent = this.getIndent(this.peek());
-    
-    while (!this.isAtEnd() && !this.peek().startsWith('sino') && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
-      thenStatements.push(this.parseStatement());
-    }
-    
-    let elseStatements = null;
-    if (this.peek()?.startsWith('sino')) {
-      this.advance();
-      elseStatements = [];
-      while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
-        elseStatements.push(this.parseStatement());
-      }
-    }
-    
-    if (this.peek() === 'fin') {
-      this.advance();
-    }
-    
-    return {
-      type: 'if_statement',
-      condition,
-      thenBranch: { type: 'block', statements: thenStatements },
-      elseBranch: elseStatements ? { type: 'block', statements: elseStatements } : null,
-    };
-  }
-
-  private parseForLoop(): any {
-    const line = this.advance();
-    const match = line.match(/para\s+(\w+)\s+en\s+(.+):/);
-    
-    if (!match) {
-      throw new Error(`Sintaxis de para inválida: ${line}`);
-    }
-    
-    const variable = match[1];
-    const collection = this.parseExpressionFromString(match[2]);
-    
-    const bodyStatements: any[] = [];
-    let indent = this.getIndent(this.peek());
-    
-    while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
-      bodyStatements.push(this.parseStatement());
-    }
-    
-    if (this.peek() === 'fin') {
-      this.advance();
-    }
-    
-    return {
-      type: 'for_loop',
-      variable,
-      collection,
-      body: { type: 'block', statements: bodyStatements },
-    };
-  }
-
-  private parseWhileLoop(): any {
-    const line = this.advance();
-    const conditionStr = line.substring(9, line.length - 1).trim();
-    const condition = this.parseExpressionFromString(conditionStr);
-    
-    const bodyStatements: any[] = [];
-    let indent = this.getIndent(this.peek());
-    
-    while (!this.isAtEnd() && this.peek() !== 'fin' && this.getIndent(this.peek()) >= indent) {
-      bodyStatements.push(this.parseStatement());
-    }
-    
-    if (this.peek() === 'fin') {
-      this.advance();
-    }
-    
-    return {
-      type: 'while_loop',
-      condition,
-      body: { type: 'block', statements: bodyStatements },
-    };
-  }
-
-  private parseExpression(): any {
-    const line = this.advance();
-    return this.parseExpressionFromString(line);
-  }
-
-  private parseExpressionFromString(str: string): any {
-    str = str.trim();
-    
-    // Llamadas a función
-    if (str.includes('(') && str.includes(')')) {
-      const parenIndex = str.indexOf('(');
-      const name = str.substring(0, parenIndex).trim();
-      const argsStr = str.substring(parenIndex + 1, str.lastIndexOf(')')).trim();
-      
-      const args: any[] = [];
-      if (argsStr) {
-        const argParts = this.splitArgs(argsStr);
-        for (const arg of argParts) {
-          args.push(this.parseExpressionFromString(arg.trim()));
-        }
-      }
-      
-      return {
-        type: 'function_call',
-        name,
-        args,
-      };
-    }
-    
-    // Operaciones binarias
-    for (const op of ['==', '!=', '<=', '>=', '<', '>', '+', '-', '*', '/', 'y', 'o', 'and', 'or']) {
-      if (str.includes(op)) {
-        const parts = str.split(op);
-        if (parts.length === 2) {
-          return {
-            type: 'binary_operation',
-            operator: op,
-            left: this.parseExpressionFromString(parts[0].trim()),
-            right: this.parseExpressionFromString(parts[1].trim()),
-          };
-        }
-      }
-    }
-    
-    // Números
-    if (!isNaN(Number(str))) {
-      return { type: 'literal', value: { type: 'number', value: Number(str) } };
-    }
-    
-    // Strings
-    if ((str.startsWith('"') && str.endsWith('"')) || (str.startsWith("'") && str.endsWith("'"))) {
-      return { type: 'literal', value: { type: 'string', value: str.slice(1, -1) } };
-    }
-    
-    // Booleanos
-    if (str === 'verdadero' || str === 'falso') {
-      return { type: 'literal', value: { type: 'boolean', value: str === 'verdadero' } };
-    }
-    
-    // Arrays
-    if (str.startsWith('[') && str.endsWith(']')) {
-      const itemsStr = str.slice(1, -1).trim();
-      const items = itemsStr ? this.splitArgs(itemsStr).map(item => this.parseExpressionFromString(item.trim())) : [];
-      const values = items.map(item => item.value || item);
-      return { type: 'literal', value: { type: 'array', value: values } };
-    }
-    
-    // Variables
-    return {
-      type: 'variable_reference',
-      name: str,
-    };
-  }
-
-  private splitArgs(str: string): string[] {
-    const args: string[] = [];
-    let current = '';
-    let depth = 0;
-    
-    for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      if (char === '(' || char === '[') depth++;
-      if (char === ')' || char === ']') depth--;
-      
-      if (char === ',' && depth === 0) {
-        args.push(current);
-        current = '';
-      } else {
-        current += char;
-      }
-    }
-    
-    if (current) args.push(current);
-    return args;
-  }
-
-  private getIndent(line: string): number {
-    if (!line) return 0;
-    let count = 0;
-    for (const char of line) {
-      if (char === ' ') count++;
-      else break;
-    }
-    return count;
-  }
-
-  private peek(): string {
-    return this.lines[this.current] || '';
-  }
-
-  private advance(): string {
-    return this.lines[this.current++] || '';
-  }
-
-  private isAtEnd(): boolean {
-    return this.current >= this.lines.length;
-  }
-}
-
 export function interpretGWL(code: string): GWLParseResult {
   const errors: string[] = [];
   let html = '';
@@ -626,17 +838,19 @@ export function interpretGWL(code: string): GWLParseResult {
   let js = '';
 
   try {
-    const parser = new GWLParser(code);
+    const lexer = new Lexer(code);
+    const tokens = lexer.tokenize();
+    const parser = new Parser(tokens);
     const ast = parser.parse();
     const runtime = new GWLRuntime();
     const uiCommands = runtime.execute(ast);
-    
+
     html = uiCommandsToHTML(uiCommands);
-    
+
     if (!html) {
       html = '<div class="gwl-preview"><h2>Vista Previa GWL+</h2><p>Escribe tu código para comenzar...</p></div>';
     }
-    
+
   } catch (error) {
     errors.push(`Error: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     html = `<div class="gwl-error"><h3>Error en el código</h3><p>${error instanceof Error ? error.message : 'Error desconocido'}</p></div>`;
@@ -655,12 +869,12 @@ function uiCommandsToHTML(commands: any[]): string {
 
 function renderUICommand(cmd: any): string {
   if (!cmd || !cmd.type) return '';
-  
+
   switch (cmd.type) {
-    case 'ui_container':
-      return `<div class="gwl-container" id="${cmd.id}">${cmd.children.map(renderUICommand).join('')}</div>`;
+    case 'ui_window':
+      return `<div class="gwl-window"><h1 class="gwl-title">${cmd.title}</h1>${cmd.children.map(renderUICommand).join('')}</div>`;
     case 'ui_heading':
-      return `<h${cmd.level} class="gwl-heading">${cmd.text}</h${cmd.level}>`;
+      return `<h${cmd.size} class="gwl-heading">${cmd.text}</h${cmd.size}>`;
     case 'ui_text':
       return `<p class="gwl-text">${cmd.content}</p>`;
     case 'ui_button':
@@ -672,22 +886,13 @@ function renderUICommand(cmd: any): string {
   }
 }
 
-export const exampleGWLCode = `# Lenguaje GWL+ - Sintaxis Única
-# Variables
-titulo = "Calculadora GWL+"
-contador = 0
+export const exampleGWLCode = `# GWL+ - Lenguaje Único de Programación
+# Variables y tipos
+nombre = "Calculadora GWL+"
 numeros = [1, 2, 3, 4, 5]
+total = 0
 
-# Función para sumar array
-definir sumar_lista(lista):
-    total = 0
-    para num en lista:
-        total = total + num
-    fin
-    retornar total
-fin
-
-# Función para factorial
+# Función recursiva para factorial
 definir factorial(n):
     si n == 0:
         retornar 1
@@ -696,26 +901,29 @@ definir factorial(n):
     fin
 fin
 
-# Calcular valores
-suma_total = sumar_lista(numeros)
-fact_5 = factorial(5)
-
-# Crear interfaz de usuario
-definir crear_app():
-    crear_contenedor("app"):
-        agregar_titulo(titulo, nivel=1)
-        agregar_texto("Suma del array: " + str(suma_total))
-        agregar_texto("Factorial de 5: " + str(fact_5))
-        agregar_boton("Click aquí")
+# Función para sumar array
+definir sumar_array(lista):
+    suma = 0
+    para numero en lista:
+        suma = suma + numero
     fin
+    retornar suma
 fin
 
-# Mostrar la aplicación
-mostrar(crear_app())
+# Calcular valores
+total = sumar_array(numeros)
+fact5 = factorial(5)
+
+# Crear interfaz
+ventana = crear_ventana(nombre)
+mostrar(titulo(nombre, 1))
+mostrar(texto("Suma total: " + str(total)))
+mostrar(texto("Factorial de 5: " + str(fact5)))
+mostrar(boton("Calcular"))
 `;
 
 export const tutorialExamples = {
-  basic: `# Tutorial 1: Variables y Tipos
+  basic: `# Tutorial 1: Variables
 nombre = "Juan"
 edad = 25
 activo = verdadero
@@ -725,18 +933,11 @@ imprimir(edad)`,
 
   functions: `# Tutorial 2: Funciones
 definir saludar(nombre):
-    retornar "Hola, " + nombre + "!"
-fin
-
-definir sumar(a, b):
-    retornar a + b
+    retornar "Hola, " + nombre
 fin
 
 mensaje = saludar("Mundo")
-resultado = sumar(10, 20)
-
-imprimir(mensaje)
-imprimir(resultado)`,
+imprimir(mensaje)`,
 
   control: `# Tutorial 3: Control de Flujo
 edad = 18
@@ -747,17 +948,17 @@ sino:
     imprimir("Menor de edad")
 fin
 
+# Bucle
 contador = 0
 mientras contador < 5:
     imprimir(contador)
     contador = contador + 1
 fin`,
 
-  complete: `# Tutorial 4: Aplicación Completa
-items = ["Manzana", "Banana", "Naranja"]
-total = 0
+  complete: `# Tutorial 4: App Completa
+items = ["Item 1", "Item 2", "Item 3"]
 
-definir contar_items(lista):
+definir contar(lista):
     cuenta = 0
     para item en lista:
         cuenta = cuenta + 1
@@ -765,15 +966,9 @@ definir contar_items(lista):
     retornar cuenta
 fin
 
-cantidad = contar_items(items)
+cantidad = contar(items)
 
-definir mi_app():
-    crear_contenedor("app"):
-        agregar_titulo("Mi Aplicación", nivel=1)
-        agregar_texto("Total: " + str(cantidad))
-        agregar_boton("Actualizar")
-    fin
-fin
-
-mostrar(mi_app())`,
+mostrar(titulo("Mi Aplicación", 1))
+mostrar(texto("Total items: " + str(cantidad)))
+mostrar(boton("Actualizar"))`,
 };
