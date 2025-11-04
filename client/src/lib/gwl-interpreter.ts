@@ -589,7 +589,20 @@ class GWLRuntime {
 
   private initBuiltins() {
     this.registerNativeFunction('mostrar', ['elemento'], (args) => {
-      this.uiCommands.push(args[0]);
+      // El argumento es el resultado de funciones como titulo(), texto(), etc.
+      // Necesitamos extraer el valor del objeto GWLValue
+      const elemento = args[0];
+      
+      // Si es un objeto con tipo UI, agregarlo directamente
+      if (elemento && typeof elemento === 'object' && elemento.type) {
+        if (elemento.type.startsWith('ui_')) {
+          this.uiCommands.push(elemento);
+        } else if (elemento.value && typeof elemento.value === 'object' && elemento.value.type) {
+          // Es un GWLValue que contiene un objeto UI
+          this.uiCommands.push(elemento.value);
+        }
+      }
+      
       return { type: 'null', value: null };
     });
 
@@ -608,6 +621,7 @@ class GWLRuntime {
 
     this.registerNativeFunction('titulo', ['texto', 'tamano'], (args) => {
       const size = args[1] ? args[1].value : 1;
+      // Retornar directamente el objeto UI, no envuelto en GWLValue
       return { type: 'ui_heading', text: args[0].value, size };
     });
 
@@ -901,7 +915,10 @@ function uiCommandsToHTML(commands: any[]): string {
 }
 
 function renderUICommand(cmd: any): string {
-  if (!cmd || !cmd.type) return '';
+  if (!cmd || !cmd.type) {
+    console.warn('Comando UI inválido:', cmd);
+    return '';
+  }
 
   switch (cmd.type) {
     case 'ui_window':
@@ -915,6 +932,7 @@ function renderUICommand(cmd: any): string {
     case 'ui_input':
       return `<input class="gwl-input" placeholder="${cmd.placeholder}" />`;
     default:
+      console.warn('Tipo de comando UI desconocido:', cmd.type);
       return '';
   }
 }
