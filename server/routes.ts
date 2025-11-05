@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { insertProjectSchema } from "@shared/schema";
 import { z } from "zod";
+import { gwlService } from "./gwl-service";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Project routes
@@ -81,6 +82,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Error al eliminar proyecto" });
+    }
+  });
+
+  // GWL Execution routes
+  
+  // Validation schemas
+  const transpileSchema = z.object({
+    code: z.string().max(100000, 'Código demasiado largo (máximo 100KB)')
+  });
+
+  const executeSchema = z.object({
+    code: z.string().max(100000, 'Código demasiado largo (máximo 100KB)'),
+    timeout: z.number().min(100).max(30000).optional().default(5000)
+  });
+  
+  // Transpile GWL code to HTML/CSS/JS
+  app.post("/api/gwl/transpile", async (req, res) => {
+    try {
+      const validatedData = transpileSchema.parse(req.body);
+      const result = gwlService.transpile(validatedData.code);
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
+      }
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+      res.status(500).json({ error: "Error al transpilar código", details: errorMsg });
+    }
+  });
+
+  // Execute GWL code (with sandbox and timeout)
+  app.post("/api/gwl/execute", async (req, res) => {
+    try {
+      const validatedData = executeSchema.parse(req.body);
+      const result = await gwlService.execute(validatedData.code, validatedData.timeout);
+      res.json(result);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Datos inválidos", details: error.errors });
+      }
+      const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+      res.status(500).json({ error: "Error al ejecutar código", details: errorMsg });
     }
   });
 
