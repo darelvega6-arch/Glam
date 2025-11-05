@@ -280,3 +280,9 @@ export class GWLTranspiler implements ITranspiler {
 </html>
     `;
   }
+}
+
+export function interpretGWL(code: string): GWLParseResult {
+  const transpiler = new GWLTranspiler();
+  return transpiler.transpile(code);
+}
