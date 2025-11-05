@@ -1,6 +1,7 @@
 
 # 📚 DOCUMENTACIÓN COMPLETA GWL+
-## Lenguaje de Programación GlaWebLang Plus
+## Lenguaje de Programación y Motor de Videojuegos 3D
+### GlaWebLang Plus - Tu propio Roblox Studio
 
 ---
 

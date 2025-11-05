@@ -6,40 +6,39 @@ export * from './transpiler';
 export * from './executor';
 export * from './io-adapter';
 
-export const exampleGWLCode = `# GWL+ - Lenguaje Único de Programación
-# Variables y tipos
-nombre = "Calculadora GWL+"
-numeros = [1, 2, 3, 4, 5]
-total = 0
+export const exampleGWLCode = `# GWL+ Motor 3D - Mi Primer Mundo
+# Crear el suelo
+suelo = crear_plano("Suelo", 0, 0, 0, 20, 20)
+cambiar_color(suelo, 50, 150, 50)
+hacer_estatico(suelo)
 
-# Función recursiva para factorial
-definir factorial(n):
-    si n == 0:
-        retornar 1
-    sino:
-        retornar n * factorial(n - 1)
-    fin
-fin
+# Crear jugador (cubo azul)
+jugador = crear_cubo("Jugador", 0, 1, 0)
+cambiar_color(jugador, 50, 100, 255)
+aplicar_fisica(jugador)
 
-# Función para sumar array
-definir sumar_array(lista):
-    suma = 0
-    para numero en lista:
-        suma = suma + numero
-    fin
-    retornar suma
-fin
+# Crear obstáculos
+obstaculo1 = crear_cubo("Obstaculo1", 3, 0.5, 0)
+cambiar_color(obstaculo1, 255, 0, 0)
+hacer_estatico(obstaculo1)
 
-# Calcular valores
-total = sumar_array(numeros)
-fact5 = factorial(5)
+obstaculo2 = crear_cilindro("Obstaculo2", -3, 1, 2, 0.5, 2)
+cambiar_color(obstaculo2, 255, 165, 0)
+hacer_estatico(obstaculo2)
 
-# Crear interfaz
-ventana = crear_ventana(nombre)
-mostrar(titulo(nombre, 1))
-mostrar(texto("Suma total: " + str(total)))
-mostrar(texto("Factorial de 5: " + str(fact5)))
-mostrar(boton("Calcular"))
+# Crear meta (esfera dorada)
+meta = crear_esfera("Meta", 0, 1, -5, 0.5)
+cambiar_color(meta, 255, 215, 0)
+
+# Plataformas flotantes
+plataforma1 = crear_cubo("Plataforma1", 5, 2, -3)
+escalar(plataforma1, 2, 0.2, 2)
+cambiar_color(plataforma1, 100, 100, 200)
+hacer_estatico(plataforma1)
+
+# Mensaje de bienvenida
+imprimir("¡Mundo 3D creado!")
+imprimir("Usa el ratón para explorar")
 `;
 
 export const tutorialExamples = {
