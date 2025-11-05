@@ -85,14 +85,6 @@ export class GWLTranspiler implements ITranspiler {
         return '';
     }
   }
-}
-
-export function interpretGWL(code: string): GWLParseResult {
-  const transpiler = new GWLTranspiler();
-  return transpiler.transpile(code);
-}
-
-
 
   private generate3DScene(commands: any[]): string {
     const objects = commands.filter(cmd => cmd.type && cmd.type.startsWith('3d_'));
